@@ -1,10 +1,10 @@
-# snapraid-helper
+# SnapRAID Helper
 
 Powershell script to Snapraid. It can stop services before any actions and start them afterwards and/or run pre/post process executables. Aborting on disk errors in the eventlog is configurable. Email can be send with the snapraid output as a attachment or as the email body.
 
 This is a powershell helper script for SnapRaid to be used in the Task Scheduler.
 
-Current Features:
+## Features
 
 * If no parameter is passed it runs a sync
 * Passing singleword (!) parameters to snapraid if the script is called with the word as an argument
@@ -32,3 +32,7 @@ Current Features:
 * Validate many configurations
 * Configuration .ini file for configurables (has to be in the same path and has to be the same name (without the .ps1 of course))
 * If EnableDebugOutput is set to 1 all variables will be written to the powershell console before the snapraid process starts (Usefull for debugging)
+
+## Credits
+
+Based on the [original PowerShell script](https://codeplexarchive.org/project/SnapRaidHelperWin) written by **Lance Rissman** <lrissman(at)gmail(dot)com>, inspired by the [bash script](https://gist.github.com/bfg100k/87a1bbccf4f15d963ff7) written by **Sidney Chong** <sidneyc(at)outlook(dot)com>. Extensively [modified](https://codeplexarchive.org/project/SnapRaidHelper) by **therealjmc** <therealjmc(at)gmail(dot)com>.

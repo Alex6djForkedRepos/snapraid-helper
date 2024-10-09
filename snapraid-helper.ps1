@@ -1,5 +1,5 @@
 ###############################
-# Snapraid Sync Helper Script #
+# SnapRAID Helper: PowerShell wrapper script for SnapRAID.
 ###############################
 # this is a helper script that keeps snapraid parity info in sync with
 # your data. Here's how it works:
@@ -11,11 +11,9 @@
 #   4) otherwise, it will call sync.
 #   5) when sync finishes, it sends an email with the output to user.
 #
-# $Author: therealjmc
-# $Version: 3.3 (2016/06/16)
-#
-# Originally inspired by bash script written by sidney for linux/bash
-# Based on the powershell script written by lrissman at gmail dot com
+# $Authors: droolio, therealjmc, lrissman
+# $Version: 3.5-dev
+# $Date: 2024-10-09
 #
 #######################################################################
 ###################### CHANGELOG ######################################
