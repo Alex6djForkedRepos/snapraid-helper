@@ -1,164 +1,20 @@
-###############################
+#
 # SnapRAID Helper: PowerShell wrapper script for SnapRAID.
-###############################
-# this is a helper script that keeps snapraid parity info in sync with
-# your data. Here's how it works:
-#   1) it first calls diff to figure out if the parity info is out of sync
-#   2) if there are changed files (i.e. new, changed, moved or removed),
-#         it then checks how many files were removed.
-#   3) if the deleted files exceed X (configurable), it triggers an
-#         alert email and stops. (in case of accidental deletions)
-#   4) otherwise, it will call sync.
-#   5) when sync finishes, it sends an email with the output to user.
 #
 # $Authors: droolio, therealjmc, lrissman
 # $Version: 3.5-dev
 # $Date: 2024-10-09
 #
-#######################################################################
-###################### CHANGELOG ######################################
-#######################################################################
-#
-# Version 3.3 (2016/06/16)
-# Cleanup of example ini file (Thanks @ Marco)
-#
-# Version 3.2 (2015/05/16)
-# Fixed the SnapRAID 8.1 diff exit code 2 if a change is needed
-#
-# Version 3.1 (2015/02/09)
-# Fixed miss-formated output from status if shorten logfile enabled
-#
-# Version 3.0 (2015/02/06)
-# Added a switch to shorten to logfile to just 1 line per percentage
-#
-# Version 2.9 (2015/01/27)
-# Fixed a small cosmetic bug in the logrotation
-#
-# Version 2.8 (2014/12/03)
-# Added SnapRAIDStatusAfterScrub to get a snapraid status after scrubbing
-# Fixed a bug where snapraid-output of diff would be attached twice in logfile
-#
-# Version 2.7 (2014/08/18)
-# Fixed writing to eventlog if email is disabled
-#
-# Version 2.6 (2014/04/19)
-# Added a way to influence the percentage of a default scrub run with optional -scrubpercent option 
-#
-# Version 2.5.2 (2014/04/06)
-# Looks like a small encoding bug in the script. Should fix "A positional parameter cannot be found that accepts argument[...]" error
-#
-# Version 2.5.1 (2014/04/06)
-# Added some more Debug Output to find a user reported Error
-#
-# Version 2.5 (2014/04/05)
-# Added EnableDebugOutput Variable, if set to 1 all variables will be printed before snapraid starts
-#
-# Version 2.4 (2014/04/05)
-# Fixed a wrong info about the location of the output files in the ini file
-#
-# Version 2.3 (2014/04/03)
-# Added syncandfix option
-#
-# Version 2.2 (2014/03/24)
-# Fixed a small cosmetic bug regarding Eventlog on the first script run
-#
-# Version 2.1 (2014/03/14)
-# Added SnapRAIDConfig to ini file and included it as passing arguments to snapraid (fixes bug from Task sheduler when working directory was not set to snapraid dir)
-#
-# Version 2.0 (2014/03/13)
-# Release on codeplex
-# Fix a little bug in the condition for running pre-process only if needed when SkipParityFilesAtStart=1
-#
-#######################################################################
-###################### END CHANGELOG ##################################
-#######################################################################
-#
-# Modification by therealjmc:
-# - Various fixes (for example the LastExiStCode and various "=" instead of -eq)
-# - Added parameter to script to pass other commands (for example scrub)
-# - Added Eventlog logging
-# - Added output as attachment (including zip if above certain size)
-# - Max Attachment Size is configurable
-# - Added check to prevent double execution of script and/or snapraid
-# - Making Logfile rotation a config variable (How many zip files should be stored)
-# - Fixed messed up Umlauts with .Net File reading method
-# - Added possibility to send emails without auth
-# - Filename for ini now has to be the same as the script (without the .ps1 of course) (instead of fixed name)
-# - Fixed the Services Section (was Process in .ini instead of Service) - UNTESTED!
-# - Fixed the counting for the diff (especially with Snapraid 5.X+ since update and resize are different now)
-# - Fixed double printing of snapraid diff output in email
-# - Include the extended SnapRAID Log (5.X+ prints detailed error infos there) in the email if there is an snapraid error
-# - Added Pre/Post Process (Pre will be called before the parity file test and Post will be called before E-Mail will be sent)
-# - Added SkipParityFilesAtStart - if set to 1 parity file checking will be skipped unless diff finds a diference and runs Pre Process only if needed
-# - Post Process/Service start will only run if Pre Process/Service stop has run
-# - If argument passed is "syncandcheck" (without the "") there will be a sync (if needed) before a check is called
-# - If argument passed is "syncandscrub" (without the "") there will be a sync (if needed) before a scrub is called (scrub without any parameters, snapraid default)
-# - If argument passed is "syncandfullscrub" (without the "") there will be a sync (if needed) before a full scrub is called (-p 100 -o 0 as parameters)
-# - If argument passed is "syncandfix" (without the "") there will be a sync (if needed) before a fix option (without any parameters) is done. Usefull for fixable errors in parity i.e.
-# - If -scrubpercent is added after the argument you can influence the percentage snapraid scrubs
-# - Added optional snapraid status output after scrubbing
-# - Added option to shorten the logfile to just 1 line per percent
-# - Various other fixes/enhancements
-#
-# NOTE TO USERS WITH SPECIAL CHARACTERS IN FILE/FOLDER NAMES:
-# I had a problem with German Umlauts not beeing displayed correct. Enable UTF8Console in the .ini
-# You HAVE to Change the Powershell Console Font to something like Lucida Console
-# Note: Windows has a bug saving Lucida with Fontsize 12 as default. Select 10 or 14 - this works
-# 
-#######################################################################
-#Enable to pass the check/scrub command to SnapRAID as a parameter for the Powershellscript
-#Has to be the first non-comment and non-blank line, otherwise param won't work.
+
 Param([string]$Argument1='sync',[int]$ScrubPercent=999)
 $Argument1 = $Argument1.ToLower()
 
-<#
-
-Note:  To run a powershell script you must perform the following:
-Only Once:
-1) Download the PowerShellExecutionPolicy.adm from http://go.microsoft.com/fwlink/?LinkId=131786.
-2) Install it
-3) open gpedit.msc
-4) Under computer configuration, right-click Administrative Templates and then click Add/Remove Templates
-5) Add PowerShellExecutionPolicy.adm from %programfiles%\Microsoft Group policy
-6) Open Administrative Templates\Classic Administrative Templates\Windows Components\Windows PowerShell
-7) Enable the property and allow unsigned scripts to be run
-
-each time:
-1) open the power shell prompt
-2) from the directory of video files, run the script
-#>
-
-##########################################
-############# NOTES ######################
-##########################################
-<#   
-- This script depends upon the powershell community extensions from http://pscx.codeplex.com/
-- Or direct sownload: http://pscx.codeplex.com/downloads/get/523236
-- Snapraid's output is unix formatted (CRLF vs CR) so -delim "`0" is required to have each line on newline when using Get-Content
-- Service Start and Stop requires the script to run with Elevated Rights
-- snapraid-helper.ini file is required in the same dir as the .ps1
-#>
-##########################################
-############# END NOTES ##################
-##########################################
-
-##########################################
-########## INCLUSDES #####################
-##########################################
 $env:PSModulePath=$env:PSModulePath+";C:\Program Files (x86)\PowerShell Community Extensions\Pscx3"
-##########################################
-########## END INCLUSDES #################
-##########################################
 
 $Scriptname			= $MyInvocation.MyCommand.Name
 #$Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%'"
 $Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
 $Snapraidrunning	= get-wmiobject win32_process -filter "name='snapraid.exe'"
-
-
-##############################################
-############# VARIABLES ######################
-##############################################
 
 $global:PreProcessHasRun = 0
 $global:ServicesStarted = 0
@@ -168,16 +24,6 @@ $SomethingDone = 0
 $HomePath = $MyInvocation.Line | Split-Path
 $message = ""
 $ConfigError = 0
-
-##############################################
-############# END VARIABLES ##################
-##############################################
-
-
-
-##############################################
-############# FUNCTIONS ######################
-##############################################
 
 function Test-IsAdmin {     #Borrowed from with some modifications: http://stackoverflow.com/questions/9999963/powershell-test-admin-rights-within-powershell-script
 	try {
@@ -596,13 +442,6 @@ Function DiffAnalyze {
 	}
 }
 
-##############################################
-############### END FUNCTIONS ################
-##############################################
-
-##############################################
-###### Configuration Verification Start ######
-##############################################
 # Get variables from <scriptname>.ini
 $Scriptname2=[System.IO.Path]::GetFileNameWithoutExtension("$Scriptname")
 $ConfigFile="$HomePath\$Scriptname2.ini"
@@ -620,7 +459,8 @@ Get-Content $ConfigFile | foreach {
 	#   write-host Variable: $line[0]  Content: $line[1]
 	}
 }
-##### Validate configuration variables are sane
+
+# Validate configuration variables are sane
 
 #SnapRAID and LogFile Config
 $SnapRAIDConfigs = "SnapRAIDDelThreshold","SnapRAIDPath","SnapRAIDExe","SnapRAIDContentFiles","SnapRAIDParityFiles","TmpOutputFile","LogFileName","LogFileMaxSize","LogFileZipCount","UTF8Console","SnapRAIDStatusAfterScrub"
@@ -753,10 +593,6 @@ if ( !(Test-Path $config["TmpOutputPath"] -pathType container) ) {
 	Write-host "ERROR: TmpOutputPath:" $config["TmpOutputPath"]"  - Path Does not exist.  Please fix $ConfigFile or create the path"
 	exit 1
 }
-
-##############################################
-###### Configuration Verification End ########
-##############################################
 
 #Initalize Email
 if ($config["EmailEnable"] -eq 1) {
