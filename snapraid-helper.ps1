@@ -1,10 +1,24 @@
-#
-# SnapRAID Helper: PowerShell wrapper script for SnapRAID.
-#
-# $Authors: droolio, therealjmc, lrissman
-# $Version: 3.5-dev
-# $Date: 2024-10-09
-#
+<#
+.SYNOPSIS
+	SnapRAID Helper: PowerShell wrapper script for SnapRAID.
+.DESCRIPTION
+	This script helps automate routine SnapRAID tasks with Windows Task 
+	Scheduler, ensuring that parity regularly stays in sync with your data.
+.PARAMETER Argument1
+	(Optional) The command to perform. Default is 'sync'.
+.PARAMETER ScrubPercent
+	(Optional) The percentage of data to scrub. Default is 8.33%.
+.EXAMPLE
+	.\snapraid-helper.ps1
+	Run a regular snapraid.exe sync.
+.EXAMPLE
+	.\snapraid-helper.ps1 syncandscrub
+	Run a sync and then a scrub.
+.NOTES
+	Authors: droolio, therealjmc, lrissman
+	Version: 3.5-dev
+	Date: 2024-10-09
+#>
 
 Param([string]$Argument1='sync',[int]$ScrubPercent=999)
 $Argument1 = $Argument1.ToLower()
