@@ -20,15 +20,19 @@
 	Date: 2024-10-09
 #>
 
-Param([string]$Argument1='sync',[int]$ScrubPercent=999)
+param(
+	[string]$Argument1 = 'sync',
+	[int]$ScrubPercent = 999
+)
+
 $Argument1 = $Argument1.ToLower()
 
-$env:PSModulePath=$env:PSModulePath+";C:\Program Files (x86)\PowerShell Community Extensions\Pscx3"
+$env:PSModulePath = $env:PSModulePath + ";C:\Program Files (x86)\PowerShell Community Extensions\Pscx3"
 
-$Scriptname			= $MyInvocation.MyCommand.Name
+$Scriptname = $MyInvocation.MyCommand.Name
 #$Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%'"
-$Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
-$Snapraidrunning	= get-wmiobject win32_process -filter "name='snapraid.exe'"
+$Scriptrunning = Get-WmiObject win32_process -Filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
+$Snapraidrunning = Get-WmiObject win32_process -Filter "name='snapraid.exe'"
 
 $global:PreProcessHasRun = 0
 $global:ServicesStarted = 0
@@ -39,19 +43,21 @@ $HomePath = $MyInvocation.Line | Split-Path
 $message = ""
 $ConfigError = 0
 
-function Test-IsAdmin {     #Borrowed from with some modifications: http://stackoverflow.com/questions/9999963/powershell-test-admin-rights-within-powershell-script
+function Test-IsAdmin {
+	# Borrowed from with some modifications: http://stackoverflow.com/questions/9999963/powershell-test-admin-rights-within-powershell-script
 	try {
 		$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 		$principal = New-Object Security.Principal.WindowsPrincipal -ArgumentList $identity
-		return $principal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator )
+		return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 	} catch {
 		#throw "Failed to determine if the current user has elevated privileges. The error was: '{0}'." -f $_
 		return 0
 	}
+
 	return 1
 }
 
-Function Start-Pre-Process {
+function Start-Pre-Process {
 	# If Process Management is enabled, then start Pre Process
 	if ($config["ProcessEnable"] -eq 1) {
 		# timestamp the job
@@ -60,17 +66,17 @@ Function Start-Pre-Process {
 		WriteLogFile $message
 		$exe = $config["ProcessPre"]
 		& "$exe" | Out-Null
+
 		if (!($LastExitCode -eq "0")) {
 			$CurrentDate = Get-Date
 			$message = "ERROR: Pre-Process failed on $CurrentDate with exit code $LastExitCode"
 			WriteLogFile $message
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" "+$message
+			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
-			Stop-Transcript | out-null
+			Stop-Transcript | Out-Null
 			exit 1
-		}
-		else {
+		} else {
 			$CurrentDate = Get-Date
 			$message = "Done Starting Pre-Process $CurrentDate"
 			WriteLogFile $message
@@ -79,7 +85,7 @@ Function Start-Pre-Process {
 	}
 }
 
-Function Start-Post-Process {
+function Start-Post-Process {
 	# If Process Management is enabled, then start Post Process
 	if ($config["ProcessEnable"] -eq 1) {
 		if ($global:PreProcessHasRun -eq 1) {
@@ -89,16 +95,16 @@ Function Start-Post-Process {
 			WriteLogFile $message
 			$exe = $config["ProcessPost"]
 			& "$exe" | Out-Null
+
 			if (!($LastExitCode -eq "0")) {
 				$CurrentDate = Get-Date
 				$message = "ERROR: Post-Process failed on $CurrentDate with exit code $LastExitCode"
 				WriteLogFile $message
-				$subject = $config["SubjectPrefix"]+" "+$message
+				$subject = $config["SubjectPrefix"] + " " + $message
 				Send-Email $subject "error" $EmailBody
-				Stop-Transcript | out-null
+				Stop-Transcript | Out-Null
 				exit 1
-			}
-			else {
+			} else {
 				$CurrentDate = Get-Date
 				$message = "Done Starting Post-Process $CurrentDate"
 				WriteLogFile $message
@@ -108,136 +114,147 @@ Function Start-Post-Process {
 }
 
 # Build Email Function (used many times in script)
-Function Send-Email ($fSubject,$fSuccess,$EmailBody){
-	#$fSubject -- passed subject line
-	#$fSuccess -- "success" = success email, "error" = error email, "error2" = error email script/snapraid running
+function Send-Email ($fSubject, $fSuccess, $EmailBody) {
+	# $fSubject -- passed subject line
+	# $fSuccess -- "success" = success email, "error" = error email, "error2" = error email script/snapraid running
 	$Body = ""
-	
+
 	if ($fSuccess -eq "success") {
 		$EventlogID = 4711
 	}
+
 	if ($fSuccess -eq "error") {
 		$EventlogID = 4712
 	}
+
 	if ($fSuccess -eq "error2") {
 		$EventlogID = 4712
 	}
-	
+
 	if ($fSuccess -ne "error2") {
-		if ($config["IncludeExtendedInfoZip"] -eq 1 ){
-			If (Test-Path $EmailBodyTmp) {
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			if (Test-Path $EmailBodyTmp) {
 				Rename-Item "$EmailBodyTmp" "$EmailBodyTxt"
 			}
-		
-			if (Test-Path "$EmailBodyTxt") { 
+
+			if (Test-Path "$EmailBodyTxt") {
 				$file = Get-Item "$EmailBodyTxt"
+
 				if ($file.length -ge $config["LogFileMaxSizeZIP"]) {
-					Write-zip -Path "$EmailBodyTxt" -OutputPath "$EmailBodyZip"  -level 9 -Quiet
-				}
-				else {
+					Write-zip -Path "$EmailBodyTxt" -OutputPath "$EmailBodyZip" -level 9 -Quiet
+				} else {
 					$EmailBodyZip = $EmailBodyTxt
 				}
 			}
 		}
 	}
-	
+
 	if (($fSuccess -eq "success") -and ($config["EmailOnSuccess"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
-		if ($config["IncludeExtendedInfo"] -eq 1 ){
-			$Body = (Get-Content $EmailBody | Out-string)
+		if ($config["IncludeExtendedInfo"] -eq 1) {
+			$Body = (Get-Content $EmailBody | Out-String)
 		}
-		if ($config["IncludeExtendedInfoZip"] -eq 1 ){
-			If (Test-Path $EmailBodyZip) {
-				If ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]){
-					If (Test-Path $EmailBodyZip) {
-						$att = new-object Net.Mail.Attachment($EmailBodyZip)
+
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			if (Test-Path $EmailBodyZip) {
+				if ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]) {
+					if (Test-Path $EmailBodyZip) {
+						$att = New-Object Net.Mail.Attachment ($EmailBodyZip)
 						$MailMessage.Attachments.Add($att)
 					}
-				}
-				else {
+				} else {
 					Add-Content $EmailBody "LOG FILE TOO LARGE TO ATTACH"
 				}
 			}
-			$Body = (Get-Content $EmailBody | Out-string)
+
+			$Body = (Get-Content $EmailBody | Out-String)
 		}
+
 		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body 	= $Body
+		$Mailmessage.Body = $Body
 		$smtpclient.Send($MailMessage)
-		if ($config["IncludeExtendedInfoZip"] -eq 1 ){
-			If (Test-Path $EmailBodyZip) {
+
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			if (Test-Path $EmailBodyZip) {
 				$att.Dispose()
 			}
 		}
 	}
+
 	if (($fSuccess -eq "error") -and ($config["EmailOnError"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
-		if ($config["IncludeExtendedInfo"] -eq 1 ){
-			$Body = (Get-Content $EmailBody | Out-string)
+		if ($config["IncludeExtendedInfo"] -eq 1) {
+			$Body = (Get-Content $EmailBody | Out-String)
 		}
-		if ($config["IncludeExtendedInfoZip"] -eq 1){
-			If (Test-Path $EmailBodyZip) {
-				If ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]){
-					If (Test-Path $EmailBodyZip) {
-						$att = new-object Net.Mail.Attachment($EmailBodyZip)
+
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			if (Test-Path $EmailBodyZip) {
+				if ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]) {
+					if (Test-Path $EmailBodyZip) {
+						$att = New-Object Net.Mail.Attachment ($EmailBodyZip)
 						$MailMessage.Attachments.Add($att)
 					}
-				}
-				else {
+				} else {
 					Add-Content $EmailBody "LOG FILE TOO LARGE TO ATTACH"
 				}
 			}
-			$Body = (Get-Content $EmailBody | Out-string)
+
+			$Body = (Get-Content $EmailBody | Out-String)
 		}
+
 		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body 	= $Body
+		$Mailmessage.Body = $Body
 		$smtpclient.Send($MailMessage)
-		if ($config["IncludeExtendedInfoZip"] -eq 1 ){
-			If (Test-Path $EmailBodyZip) {
+
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			if (Test-Path $EmailBodyZip) {
 				$att.Dispose()
 			}
 		}
 	}
+
 	if (($fSuccess -eq "error2") -and ($config["EmailOnError"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
 		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body 	= $fSubject
+		$Mailmessage.Body = $fSubject
 		$smtpclient.Send($MailMessage)
 	}
-	
-	if (!(Get-Eventlog -Source SnapRaid-Helper -LogName Application -ErrorAction SilentlyContinue)){
+
+	if (!(Get-EventLog -Source SnapRaid-Helper -LogName Application -ErrorAction SilentlyContinue)) {
 		New-EventLog -Source SnapRaid-Helper -LogName Application
 	}
-	write-eventlog -logname Application -source SnapRaid-Helper -eventID $EventlogID -message $fSubject
+
+	Write-EventLog -LogName Application -Source SnapRaid-Helper -EventId $EventlogID -Message $fSubject
 }
 
-Function Check-Content-Files {
+function Check-Content-Files {
 	foreach ($element in $config["SnapRAIDContentFiles"]) {
-		if (!(Test-Path $element)){
+		if (!(Test-Path $element)) {
 			$message = "ERROR: Content file ($element) not found!"
-			Write-Host $message -ForegroundColor red -backgroundcolor yellow
+			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" "+$message
+			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
-			Stop-Transcript | out-null
+			Stop-Transcript | Out-Null
 			exit 1
 		}
 	}
 }
 
-Function Check-Parity-Files {
+function Check-Parity-Files {
 	foreach ($element in $config["SnapRAIDParityFiles"]) {
-		if (!(Test-Path $element)){
+		if (!(Test-Path $element)) {
 			$message = "ERROR: Parity file ($element) not found!"
-			Write-Host $message -ForegroundColor red -backgroundcolor yellow
+			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" "+$message
+			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
-			Stop-Transcript | out-null
+			Stop-Transcript | Out-Null
 			exit 1
 		}
 	}
 }
 
-Function WriteLogFile ($ftext){
+function WriteLogFile ($ftext) {
 	Write-Host "----------------------------------------"
 	Write-Host $ftext
 	Write-Host "----------------------------------------"
@@ -246,21 +263,22 @@ Function WriteLogFile ($ftext){
 	Add-Content $EmailBody "----------------------------------------"
 }
 
-Function WriteExtendedLogFile ($ftext){
+function WriteExtendedLogFile ($ftext) {
 	Write-Host "----------------------------------------"
 	Write-Host $ftext
 	Write-Host "----------------------------------------"
 	Add-Content $EmailBody "----------------------------------------"
 	Add-Content $EmailBody $ftext
 	Add-Content $EmailBody "----------------------------------------"
-	if ($config["IncludeExtendedInfoZip"] -eq 1 ){
-			Add-Content $EmailBodyTmp "----------------------------------------"
-			Add-Content $EmailBodyTmp $ftext
-			Add-Content $EmailBodyTmp "----------------------------------------"
+
+	if ($config["IncludeExtendedInfoZip"] -eq 1) {
+		Add-Content $EmailBodyTmp "----------------------------------------"
+		Add-Content $EmailBodyTmp $ftext
+		Add-Content $EmailBodyTmp "----------------------------------------"
 	}
 }
 
-Function ServiceManagement ($startstop){
+function ServiceManagement ($startstop) {
 	if ($startstop -eq "stop") {
 		# If Service Management is enabled, then take services offline
 		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStopped -ne 1) {
@@ -268,10 +286,12 @@ Function ServiceManagement ($startstop){
 			$CurrentDate = Get-Date
 			$message = "Stopping Services $CurrentDate"
 			WriteLogFile $message
+
 			foreach ($service in $ServiceList) {
 				$message = Stop-Service $service
 				WriteLogFile $message
 			}
+
 			# timestamp the job
 			$CurrentDate = Get-Date
 			$message = "Done Stopping Services $CurrentDate"
@@ -279,6 +299,7 @@ Function ServiceManagement ($startstop){
 			$global:ServicesStopped = 1
 		}
 	}
+
 	if ($startstop -eq "start") {
 		# If Service Management is enabled, then bring services back online
 		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStarted -ne 1 -and $global:ServicesStopped -eq 1) {
@@ -286,10 +307,12 @@ Function ServiceManagement ($startstop){
 			$CurrentDate = Get-Date
 			$message = "Starting Services $CurrentDate"
 			WriteLogFile $message
+
 			foreach ($service in $ServiceList) {
 				$message = Start-Service $service
 				WriteLogFile $message
 			}
+
 			# timestamp the job
 			$CurrentDate = Get-Date
 			$message = "Done Starting Services $CurrentDate"
@@ -299,75 +322,63 @@ Function ServiceManagement ($startstop){
 	}
 }
 
-Function RunSnapraid ($sargument){
+function RunSnapraid ($sargument) {
 	$exe = $config["SnapRAIDPath"] + $config["SnapRAIDExe"]
 	$configfile = $config["SnapRAIDPath"] + $config["SnapRAIDConfig"]
+
 	if ($sargument -ne "fullscrub") {
 		if (($ScrubPercent -ne 999) -and ($sargument -eq "scrub")) {
-			& "$exe" -c $configfile $sargument -p $ScrubPercent -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | %{ "$_" } | tee-object -file $TmpOutput 
+			& "$exe" -c $configfile $sargument -p $ScrubPercent -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | ForEach-Object { "$_" } | Tee-Object -File $TmpOutput
+		} else {
+			& "$exe" -c $configfile $sargument -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | ForEach-Object { "$_" } | Tee-Object -File $TmpOutput
 		}
-		else {
-			& "$exe" -c $configfile $sargument -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | %{ "$_" } | tee-object -file $TmpOutput 
-		}
-	}
-	else {
+	} else {
 		$sargument = "scrub"
-		& "$exe" -c $configfile $sargument -p 100 -o 0 -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | %{ "$_" } | tee-object -file $TmpOutput 
+		& "$exe" -c $configfile $sargument -p 100 -o 0 -l $SnapRAIDLogfile 2>&1 3>&1 4>&1 | ForEach-Object { "$_" } | Tee-Object -File $TmpOutput
 	}
-	if ($config["IncludeExtendedInfoZip"] -eq 1 ){
+
+	if ($config["IncludeExtendedInfoZip"] -eq 1) {
 		$FileToAdd = $EmailBodyTmp
-	}
-	else {
+	} else {
 		$FileToAdd = $EmailBody
 	}
-	if (($config["ShortenLogFile"] -eq 1 ) -and ($sargument -ne "status" )){
+
+	if (($config["ShortenLogFile"] -eq 1) -and ($sargument -ne "status")) {
 		$TmpOutputInRAM = Get-Content $TmpOutput -ReadCount 0
-		
-		for ($i=0; $i -lt $TmpOutputInRAM.length; $i++)
-		{
-			if ($TmpOutputInRAM[$i] -match "[0-9]*[A-Z]")
-			{
-				if ($TmpOutputInRAM[$i+1] -match "[0-9]*[A-Z]")
-				{
-					$TmpOutputInRAM_First_Three = $TmpOutputInRAM[$i+1].substring(0,3)
-					if ($TmpOutputInRAM_First_Three.Substring(0,1) -match "[0-9]")
-					{
-						if ($TmpOutputInRAM[$i].startswith($TmpOutputInRAM_First_Three)) 
-						{
-						}
-						else
-						{
+
+		for ($i = 0; $i -lt $TmpOutputInRAM.length; $i++) {
+			if ($TmpOutputInRAM[$i] -match "[0-9]*[A-Z]") {
+				if ($TmpOutputInRAM[$i + 1] -match "[0-9]*[A-Z]") {
+					$TmpOutputInRAM_First_Three = $TmpOutputInRAM[$i + 1].substring(0, 3)
+
+					if ($TmpOutputInRAM_First_Three.substring(0, 1) -match "[0-9]") {
+						if ($TmpOutputInRAM[$i].startswith($TmpOutputInRAM_First_Three)) {
+						} else {
 							Add-Content $FileToAdd $TmpOutputInRAM[$i]
 						}
+					} else {
+						Add-Content $FileToAdd $TmpOutputInRAM[$i]
 					}
-					else
-					{
+				} else {
+					if ($TmpOutputInRAM[$i + 2] -notmatch "Autosaving...") {
 						Add-Content $FileToAdd $TmpOutputInRAM[$i]
 					}
 				}
-				else
-				{
-					if ($TmpOutputInRAM[$i+2] -notmatch "Autosaving...")
-                    {
-                        Add-Content $FileToAdd $TmpOutputInRAM[$i]
-                    }
-				}
 			}
 		}
-	}
-	else
-	{
-		#$TmpOutputInRAM = Get-Content $TmpOutput  -readcount 100 -delim "`0" 
+	} else {
+		#$TmpOutputInRAM = Get-Content $TmpOutput  -readcount 100 -delim "`0"
 		# NOTE the above Get-Content command is VERY VERY VERY VERY slow, so I am using the .Net function below to get the output of the Snapraid command into a variable
 		# NOTE the .Net function breaks german Umlauts so I'm using this fast way with get-content and out-string - no real time difference to .Net function
-		$TmpOutputInRAM = (Get-Content $TmpOutput | Out-string)
-		
-		foreach ($line in $TmpOutputInRAM){
+		$TmpOutputInRAM = (Get-Content $TmpOutput | Out-String)
+
+		foreach ($line in $TmpOutputInRAM) {
 			Add-Content $FileToAdd $line
 			# since output is done with tee it isn't necessary to use write-host again
 			# Write-Host $line
 		}
 	}
+
 	if (!($LastExitCode -eq "0")) {
 		if (!(($LastExitCode -eq "2") -and ($sargument = "diff"))) {
 			# If enabled bring services back online
@@ -377,64 +388,67 @@ Function RunSnapraid ($sargument){
 			WriteExtendedLogFile $message
 			$message2 = "Including detailed SnapRAID Log"
 			WriteExtendedLogFile $message2
-			$SnapRAIDLogfileInRAM = (Get-Content $SnapRAIDLogfile | Out-string)
-			if ($config["IncludeExtendedInfoZip"] -eq 1 ){
+			$SnapRAIDLogfileInRAM = (Get-Content $SnapRAIDLogfile | Out-String)
+
+			if ($config["IncludeExtendedInfoZip"] -eq 1) {
 				$FileToAdd = $EmailBodyTmp
-			}
-			else {
+			} else {
 				$FileToAdd = $EmailBody
 			}
-			foreach ($line in $SnapRAIDLogfileInRAM){
+
+			foreach ($line in $SnapRAIDLogfileInRAM) {
 				Add-Content $FileToAdd $line
 				Write-Host $line
 			}
+
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" "+$message
+			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
-			Stop-Transcript | out-null
+			Stop-Transcript | Out-Null
 			exit 1
 		}
 	}
+
 	# Job was successful, move onto processing.
 	$CurrentDate = Get-Date
 	$message = "SnapRAID $sargument Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
-	If ($sargument -eq "diff") {
+
+	if ($sargument -eq "diff") {
 		DiffAnalyze
 	}
 }
 
-Function DiffAnalyze {
-	If ($global:Diffchanges -eq 99) {
+function DiffAnalyze {
+	if ($global:Diffchanges -eq 99) {
 		$DEL_COUNT = Select-String $TMPOUTPUT -Pattern "^remove" | Measure-Object -Line
-		$ADD_COUNT = Select-String $TMPOUTPUT  -Pattern "^add" | Measure-Object -Line
-		$MOVE_COUNT = Select-String $TMPOUTPUT  -Pattern "^move" | Measure-Object -Line
-		$RESIZE_COUNT = Select-String $TMPOUTPUT  -Pattern "^resize" | Measure-Object -Line
-		$UPDATE_COUNT = Select-String $TMPOUTPUT  -Pattern "^update" | Measure-Object -Line
-		
-		$DEL_COUNT = $DEL_COUNT.Lines 
-		$ADD_COUNT = $ADD_COUNT.Lines 
-		$MOVE_COUNT = $MOVE_COUNT.Lines 
+		$ADD_COUNT = Select-String $TMPOUTPUT -Pattern "^add" | Measure-Object -Line
+		$MOVE_COUNT = Select-String $TMPOUTPUT -Pattern "^move" | Measure-Object -Line
+		$RESIZE_COUNT = Select-String $TMPOUTPUT -Pattern "^resize" | Measure-Object -Line
+		$UPDATE_COUNT = Select-String $TMPOUTPUT -Pattern "^update" | Measure-Object -Line
+
+		$DEL_COUNT = $DEL_COUNT.Lines
+		$ADD_COUNT = $ADD_COUNT.Lines
+		$MOVE_COUNT = $MOVE_COUNT.Lines
 		$UPDATE_COUNT = $UPDATE_COUNT.Lines + $RESIZE_COUNT.Lines
-		
+
 		$message = "SUMMARY of changes - Added [$ADD_COUNT] - Deleted [$DEL_COUNT] - Moved [$MOVE_COUNT] - Updated [$UPDATE_COUNT]"
 		WriteExtendedLogFile $message
-		
+
 		# check if files have changed
-		if ( $DEL_COUNT -gt 0 -or $ADD_COUNT -gt 0 -or $MOVE_COUNT -gt 0 -or $UPDATE_COUNT -gt 0 ) {
+		if ($DEL_COUNT -gt 0 -or $ADD_COUNT -gt 0 -or $MOVE_COUNT -gt 0 -or $UPDATE_COUNT -gt 0) {
 			# YES, check if number of deleted files exceed DEL_THRESHOLD
-			if ( $DEL_COUNT -gt $config["SnapRAIDDelThreshold"] ) {
+			if ($DEL_COUNT -gt $config["SnapRAIDDelThreshold"]) {
 				# YES, lets inform user and not proceed with the job just in case
 				$message = "WARNING: Number of deleted files ($DEL_COUNT) exceeded threshold (" + $config["SnapRAIDDelThreshold"] + "). NOT proceeding with job. Please run manually if this is not an error condition."
 				Write-Host $message
 				Add-Content $EmailBody $message
 				Start-Post-Process
-				$subject = $config["SubjectPrefix"]+" "+$message
+				$subject = $config["SubjectPrefix"] + " " + $message
 				Send-Email $subject "error" $EmailBody
-				Stop-Transcript | out-null
+				Stop-Transcript | Out-Null
 				exit 1
-			}
-			else {
+			} else {
 				# NO, delete threshold not reached, lets run the job
 				$message = "Deleted files ($DEL_COUNT) did not exceed threshold (" + $config["SnapRAIDDelThreshold"] + "), proceeding with job."
 				Write-Host $message
@@ -445,8 +459,7 @@ Function DiffAnalyze {
 				Add-Content $EmailBody $message
 				$global:Diffchanges = 1
 			}
-		}
-		else {
+		} else {
 			# NO, so lets log it and exit
 			$CurrentDate = Get-Date
 			$message = "$CurrentDate No change detected. Nothing to do"
@@ -457,306 +470,326 @@ Function DiffAnalyze {
 }
 
 # Get variables from <scriptname>.ini
-$Scriptname2=[System.IO.Path]::GetFileNameWithoutExtension("$Scriptname")
-$ConfigFile="$HomePath\$Scriptname2.ini"
+$Scriptname2 = [System.IO.Path]::GetFileNameWithoutExtension("$Scriptname")
+$ConfigFile = "$HomePath\$Scriptname2.ini"
 $config = @{}
 
-Get-Content $ConfigFile | foreach {
-	if (($_.StartsWith(";")) -or (!($_))) {
-		#Non-variable or is Space
-	#    write-host "Non-Variable: $_"
-	}
-	else {
+Get-Content $ConfigFile | ForEach-Object {
+	if (($_.startswith(";")) -or (!($_))) {
+		# Non-variable or is Space
+		#    write-host "Non-Variable: $_"
+	} else {
 		$line = $_.Split("=")
 		#$config.($line[0]) = $line[1]
 		$config[$line[0]] = $line[1].TrimEnd()
-	#   write-host Variable: $line[0]  Content: $line[1]
+		#   write-host Variable: $line[0]  Content: $line[1]
 	}
 }
 
 # Validate configuration variables are sane
 
-#SnapRAID and LogFile Config
-$SnapRAIDConfigs = "SnapRAIDDelThreshold","SnapRAIDPath","SnapRAIDExe","SnapRAIDContentFiles","SnapRAIDParityFiles","TmpOutputFile","LogFileName","LogFileMaxSize","LogFileZipCount","UTF8Console","SnapRAIDStatusAfterScrub"
-foreach ($element in $SnapRAIDConfigs){
+# SnapRAID and LogFile Config
+$SnapRAIDConfigs = "SnapRAIDDelThreshold", "SnapRAIDPath", "SnapRAIDExe", "SnapRAIDContentFiles", "SnapRAIDParityFiles", "TmpOutputFile", "LogFileName", "LogFileMaxSize", "LogFileZipCount", "UTF8Console", "SnapRAIDStatusAfterScrub"
+
+foreach ($element in $SnapRAIDConfigs) {
 	if (!($config[$element]) -or ($config[$element] -eq "")) {
-		write-host "$element is null, please add a value"
-		$ConfigError ++
+		Write-Host "$element is null, please add a value"
+		$ConfigError++
 	}
 }
 
-if ($config["UTF8Console"] -eq 1){
+if ($config["UTF8Console"] -eq 1) {
 	chcp 65001
 }
 
-#Validate EmailBodyPath and if not specified, use ScriptPath
-if (!($config["LogPath"]) -or ($config["LogPath"] -eq "") ) { 
-	$config["LogPath"] = "$HomePath\" 
+# Validate EmailBodyPath and if not specified, use ScriptPath
+if (!($config["LogPath"]) -or ($config["LogPath"] -eq "")) {
+	$config["LogPath"] = "$HomePath\"
 }
 
-if ( !(Test-Path $config["LogPath"] -pathType container) ) {
-	Write-host "ERROR: LogPath: "$config["LogPath"]"  - Path Does not exist.  Please fix $ConfigFile or create the path"
+if (!(Test-Path $config["LogPath"] -PathType container)) {
+	Write-Host "ERROR: LogPath: " $config["LogPath"] "  - Path Does not exist.  Please fix $ConfigFile or create the path"
 	exit 1
-}
-else {
+} else {
 	$LogPathTest = $config["LogPath"].EndsWith("\")
-	If (!($LogPathTest)) {
+
+	if (!($LogPathTest)) {
 		$config["LogPath"] = $config["LogPath"] += "\"
 	}
 }
 
-$LogFile=$config["LogPath"] + $config["LogFileName"]
+$LogFile = $config["LogPath"] + $config["LogFileName"]
 
-#Email Configs
-$EmailConfigs = "SubjectPrefix","EmailTo","EmailFrom","Body","SMTPHost","SMTPSSLEnable","SMTPAuthEnable","EmailBodyFile","EmailBodyFileZip","EmailEnable","SMTPPort","EmailOnSuccess","EmailOnError","IncludeExtendedInfo","IncludeExtendedInfoZip","LogFileMaxSizeZIP","MaxAttachSize","ShortenLogFile"
-#If email is enabled, validate email configs are not null
-if ($config["EmailEnable"] -eq 1){
-	foreach ($element in $EmailConfigs){
+# Email Configs
+$EmailConfigs = "SubjectPrefix", "EmailTo", "EmailFrom", "Body", "SMTPHost", "SMTPSSLEnable", "SMTPAuthEnable", "EmailBodyFile", "EmailBodyFileZip", "EmailEnable", "SMTPPort", "EmailOnSuccess", "EmailOnError", "IncludeExtendedInfo", "IncludeExtendedInfoZip", "LogFileMaxSizeZIP", "MaxAttachSize", "ShortenLogFile"
+
+# If email is enabled, validate email configs are not null
+if ($config["EmailEnable"] -eq 1) {
+	foreach ($element in $EmailConfigs) {
 		if (!($config[$element]) -or ($config[$element] -eq "")) {
-			write-host "$element is null, please add a value"
-			$ConfigError ++
+			Write-Host "$element is null, please add a value"
+			$ConfigError++
 		}
-		
 	}
-	if ($config["IncludeExtendedInfoZip"] -eq 1){
+
+	if ($config["IncludeExtendedInfoZip"] -eq 1) {
 		$config["IncludeExtendedInfo"] = 0
 	}
 }
 
-#Service/Process Configs
-if ($config["ServiceEnable"] -eq 1){ 
+# Service/Process Configs
+if ($config["ServiceEnable"] -eq 1) {
 	if (!(Test-IsAdmin)) {
 		Write-Host "You need to run the script with elevated rights to start and stop services. Either run with Elevated Rights or change in $ConfigFile ProcessEnable=0"
 		exit 1
 	}
+
 	$ServiceConfigs = "ServiceName"
-	#If service handling is enabled, validate configs are not null
-	
-	foreach ($element in $ServiceConfigs){
+
+	# If service handling is enabled, validate configs are not null
+	foreach ($element in $ServiceConfigs) {
 		if (!($config[$element]) -or ($config[$element] -eq "")) {
-			write-host "$element is null, please add a value"
-			$ConfigError ++
+			Write-Host "$element is null, please add a value"
+			$ConfigError++
 		}
 	}
+
 	$ServiceNum = 0
-	$ServiceList = $config["ServiceName"].Split(",").Replace('"',"")
+	$ServiceList = $config["ServiceName"].Split(",").Replace('"', "")
+
 	foreach ($Service in $ServiceList) {
-		$ServiceNum ++
-		if (!(Get-Service $Service -ErrorAction SilentlyContinue))
-		{
+		$ServiceNum++
+
+		if (!(Get-Service $Service -ErrorAction SilentlyContinue)) {
 			"The Service $Service does not exist.   Please remove or correct in ProcessName in $ConfigFile"
 		}
 	}
 }
 
-if ($config["ProcessEnable"] -eq 1){ 
-	#If process handling is enabled, validate configs are not null
-	
-	$ProcessConfigs = "ProcessPre","ProcessPost"
-	
-	foreach ($element in $ProcessConfigs){
+if ($config["ProcessEnable"] -eq 1) {
+	# If process handling is enabled, validate configs are not null
+
+	$ProcessConfigs = "ProcessPre", "ProcessPost"
+
+	foreach ($element in $ProcessConfigs) {
 		if (!($config[$element]) -or ($config[$element] -eq "")) {
-			write-host "$element is null, please add a value"
-			$ConfigError ++
+			Write-Host "$element is null, please add a value"
+			$ConfigError++
 		}
-		if (!(Test-Path $config[$element])){
+
+		if (!(Test-Path $config[$element])) {
 			wite-host "$config[$element] is not a valid path to execute!"
-			$ConfigError ++
+			$ConfigError++
 		}
 	}
 }
 
-#EventLog Configs
-$EventLogConfigs = "EventLogSources","EventLogEntryType","EventLogDays","EventLogHaltOnDiskError"
-if ($config["EventLogEnable"] -eq 1){
-	foreach ($element in $EventLogConfigs){
+# EventLog Configs
+$EventLogConfigs = "EventLogSources", "EventLogEntryType", "EventLogDays", "EventLogHaltOnDiskError"
+if ($config["EventLogEnable"] -eq 1) {
+	foreach ($element in $EventLogConfigs) {
 		if (!($config[$element]) -or ($config[$element] -eq "")) {
-			write-host "$element is null, please add a value"
-			$ConfigError ++
+			Write-Host "$element is null, please add a value"
+			$ConfigError++
 		}
 	}
-	$EventLogEntryTypeList = $config["EventLogEntryType"].Replace('"',"").Trim().Split(",")
-	$EventLogSourcesList = $config["EventLogSources"].Replace('"',"").Trim().Split(",")
+
+	$EventLogEntryTypeList = $config["EventLogEntryType"].Replace('"', "").Trim().Split(",")
+	$EventLogSourcesList = $config["EventLogSources"].Replace('"', "").Trim().Split(",")
 }
 
-
-#Report if there are errors and exit
+# Report if there are errors and exit
 if ($ConfigError -ge 1) {
-	write-host "Number of config errors: $ConfigError"
-	write-host "Please correct $ConfigFile and run again"
+	Write-Host "Number of config errors: $ConfigError"
+	Write-Host "Please correct $ConfigFile and run again"
 	exit 1
 }
 
-#Validate EmailBodyPath and if not specified, use Windows Temp path
-if (!($config["EmailBodyPath"]) -or ($config["EmailBodyPath"] -eq "") ) { 
-	$config["EmailBodyPath"] = "$env:temp\" 
+# Validate EmailBodyPath and if not specified, use Windows Temp path
+if (!($config["EmailBodyPath"]) -or ($config["EmailBodyPath"] -eq "")) {
+	$config["EmailBodyPath"] = "$env:temp\"
 }
 
-if ( !(Test-Path $config["EmailBodyPath"] -pathType container) ) {
-	Write-host "ERROR: EmailBodyPath: "$config["EmailBodyPath"]"  - Path Does not exist.  Please fix $ConfigFile or create the path"
+if (!(Test-Path $config["EmailBodyPath"] -PathType container)) {
+	Write-Host "ERROR: EmailBodyPath: " $config["EmailBodyPath"] "  - Path Does not exist.  Please fix $ConfigFile or create the path"
 	exit 1
 }
 
-
-#Validate TmpOutputPath and if not specified, use Windows Temp path
-if (!($config["TmpOutputPath"]) -or ($config["TmpOutputPath"] -eq "")){ 
-	$config["TmpOutputPath"] = "$env:temp\" 
+# Validate TmpOutputPath and if not specified, use Windows Temp path
+if (!($config["TmpOutputPath"]) -or ($config["TmpOutputPath"] -eq "")) {
+	$config["TmpOutputPath"] = "$env:temp\"
 }
 
-if ( !(Test-Path $config["TmpOutputPath"] -pathType container) ) {
-	Write-host "ERROR: TmpOutputPath:" $config["TmpOutputPath"]"  - Path Does not exist.  Please fix $ConfigFile or create the path"
+if (!(Test-Path $config["TmpOutputPath"] -PathType container)) {
+	Write-Host "ERROR: TmpOutputPath:" $config["TmpOutputPath"] "  - Path Does not exist.  Please fix $ConfigFile or create the path"
 	exit 1
 }
 
-#Initalize Email
+# Initalize Email
 if ($config["EmailEnable"] -eq 1) {
 	$SMTPClient = New-Object Net.Mail.SmtpClient
-	$MailMessage= New-Object Net.Mail.Mailmessage
+	$MailMessage = New-Object Net.Mail.Mailmessage
 	$MailMessage.IsBodyHtml = $false
 	$SMTPClient.Host = $config["SMTPHost"]
 	$SMTPClient.Port = $config["SMTPPort"]
 	$MailMessage.From = $config["EmailFrom"]
-	$MailMessage.To.add($config["EmailTo"])
+	$MailMessage.To.Add($config["EmailTo"])
+
 	if ($config["SMTPSSLEnable"] -eq 1) {
 		$SMTPClient.EnableSsl = $true
 		[System.Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-	}
-	else {
+	} else {
 		$SMTPClient.EnableSsl = $false
 	}
+
 	if ($config["SMTPAuthEnable"] -eq 1) {
-		$SMTPClient.Credentials = new-Object System.Net.NetworkCredential($config["SMTPUID"],$config["SMTPPass"]); 
+		$SMTPClient.Credentials = New-Object System.Net.NetworkCredential ($config["SMTPUID"], $config["SMTPPass"]);
 	}
 }
-$TmpOutput=$config["TmpOutputPath"] + $config["TmpOutputfile"]
-$EmailBody=$config["EmailBodyPath"] + $config["EmailBodyfile"]
-$EmailBodyTmp=$config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".out"
-$EmailBodyTxt=$config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".txt"
-$EmailBodyZip=$config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".zip"
-$SnapRAIDLogfile=$config["TmpOutputPath"] + "snapRAIDerror.out"
 
-#Ensure only one Snapraid process and only one instance of this script is running
-#Note that the detection for running script only works if it is called with the script as a parameter
-#for example powershell.exe snapraid-helper.ps1 - but not if the script is called like .\snapraid-helper.ps1
-If ($Scriptrunning -match "Handle"){
+$TmpOutput = $config["TmpOutputPath"] + $config["TmpOutputfile"]
+$EmailBody = $config["EmailBodyPath"] + $config["EmailBodyfile"]
+$EmailBodyTmp = $config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".out"
+$EmailBodyTxt = $config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".txt"
+$EmailBodyZip = $config["EmailBodyPath"] + $config["EmailBodyFileZip"] + ".zip"
+$SnapRAIDLogfile = $config["TmpOutputPath"] + "snapRAIDerror.out"
+
+# Ensure only one Snapraid process and only one instance of this script is running
+# Note that the detection for running script only works if it is called with the script as a parameter
+# for example powershell.exe snapraid-helper.ps1 - but not if the script is called like .\snapraid-helper.ps1
+if ($Scriptrunning -match "Handle") {
 	$CurrentDate = Get-Date
 	$message = "ERROR: Another instance of the script is still running! $Argument1 can't run on $CurrentDate"
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "error2"
 	exit 1
 }
-If ($Snapraidrunning -match "Handle"){
+
+if ($Snapraidrunning -match "Handle") {
 	$CurrentDate = Get-Date
 	$message = "ERROR: Another instance of snapraid is still running! $Argument1 can't run on $CurrentDate"
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "error2"
 	exit 1
 }
 
-#Start with some cleanup
-if (Test-Path $TmpOutput){
+# Start with some cleanup
+if (Test-Path $TmpOutput) {
 	Remove-Item $TmpOutput
 }
-if (Test-Path $EmailBody){
+
+if (Test-Path $EmailBody) {
 	Remove-Item $EmailBody
 }
-if (Test-Path $EmailBodyTmp){
+
+if (Test-Path $EmailBodyTmp) {
 	Remove-Item $EmailBodyTmp
 }
-if (Test-Path $EmailBodyTxt){
+
+if (Test-Path $EmailBodyTxt) {
 	Remove-Item $EmailBodyTxt
 }
-if (Test-Path $EmailBodyZip){
+
+if (Test-Path $EmailBodyZip) {
 	Remove-Item $EmailBodyZip
 }
-if (Test-Path $SnapRAIDLogfile){
+
+if (Test-Path $SnapRAIDLogfile) {
 	Remove-Item $SnapRAIDLogfile
 }
 
 if ($config["EnableDebugOutput"] -eq 1) {
-	foreach ($element in $Config){
-		echo $element
-		echo "TmpOutput = $TmpOutput"
-		echo "EmailBody = $EmailBody"
-		echo "EmailBodyTmp = $EmailBodyTmp"
-		echo "EmailBodyTxt = $EmailBodyTxt"
-		echo "EmailBodyZip = $EmailBodyZip"
-		echo "SnapRAIDLogfile = $SnapRAIDLogfile"
+	foreach ($element in $Config) {
+		Write-Output $element
+		Write-Output "TmpOutput = $TmpOutput"
+		Write-Output "EmailBody = $EmailBody"
+		Write-Output "EmailBodyTmp = $EmailBodyTmp"
+		Write-Output "EmailBodyTxt = $EmailBodyTxt"
+		Write-Output "EmailBodyZip = $EmailBodyZip"
+		Write-Output "SnapRAIDLogfile = $SnapRAIDLogfile"
 	}
 }
 
-#Log Management Section
-if (Test-Path "$LogFile") { 
+# Log Management Section
+if (Test-Path "$LogFile") {
 	$file = Get-Item "$LogFile"
-	If ($file.length -ge $config["LogFileMaxSize"]){
+
+	if ($file.length -ge $config["LogFileMaxSize"]) {
 		if ($config["LogFileZipCount"] -ge 1) {
 			$i = $config["LogFileZipCount"]
+
 			if (Test-Path "$LogFile.$i.zip") {
 				Remove-Item "$LogFile.$i.zip"
 			}
+
 			while ($i -gt 1) {
 				$j = $i - 1
+
 				if (Test-Path "$LogFile.$j.zip") {
 					Rename-Item "$LogFile.$j.zip" "$LogFile.$i.zip"
 				}
-				$i = $i-1
+
+				$i = $i - 1
 			}
+
 			Write-zip "$LogFile" -level 9
 			Rename-Item "$LogFile.zip" "$LogFile.1.zip"
 		}
+
 		Remove-Item "$LogFile"
-		New-Item "$LogFile" -type file
+		New-Item "$LogFile" -Type file
 	}
 }
 
 # Start Transcript logging
 # redirect all stdout to log file (leave stderr alone thou)
-$ErrorActionPreference="SilentlyContinue"
-Stop-Transcript | out-null
+$ErrorActionPreference = "SilentlyContinue"
+Stop-Transcript | Out-Null
 $ErrorActionPreference = "Continue"
-Start-Transcript -path $LogFile -append
+Start-Transcript -Path $LogFile -Append
 
-#Check Eventlog for Errors
+# Check Eventlog for Errors
 $CurrentDate = Get-Date
 $message = "Checking for Disk issues in Eventlog at $CurrentDate"
 WriteLogFile $message
 
-$EventLogOutput = get-eventlog -logname system -entrytype $EventLogEntryTypeList -Source $EventLogSourcesList -After (Get-Date).AddDays($config["EventLogdays"])
+$EventLogOutput = Get-EventLog -LogName system -EntryType $EventLogEntryTypeList -Source $EventLogSourcesList -After (Get-Date).AddDays($config["EventLogdays"])
 Write-Host "TimeGenerated,EntryType,Source,Message"
+
 foreach ($event in $EventLogOutput) {
 	$EventLogCount = $EventLogcount + 1
 	$TimeGenerated = $event.TimeGenerated
 	$EntryType = $event.EntryType
 	$Source = $event.Source
 	$EventMessage = $event.Message
-	
-	Write-Host "$TimeGenerated,$EntryType,$Source,$EventMessage"  
-	Add-Content $EmailBody "$TimeGenerated,$EntryType,$Source,$EventMessage"  
+
+	Write-Host "$TimeGenerated,$EntryType,$Source,$EventMessage"
+	Add-Content $EmailBody "$TimeGenerated,$EntryType,$Source,$EventMessage"
 }
 
 if (($EventLogCount -ge 1) -and ($config["EventLogHaltOnDiskError"] -eq 1)) {
 	$message = "WARN: Found disk Errors/Warnings in EventLogs.  Aborting sync based on HaltOnDiskError"
-	Write-Host $message -ForegroundColor red -backgroundcolor yellow
+	Write-Host $message -ForegroundColor red -BackgroundColor yellow
 	Add-Content $EmailBody $message
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "error" $EmailBody
-	Stop-Transcript | out-null
+	Stop-Transcript | Out-Null
 	exit 1
 }
 
-#sanity check first to make sure we can access the content and parity files
-$config["SnapRAIDContentFiles"] = $config["SnapRAIDContentFiles"].split(",")
-$config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].split(",")
+# sanity check first to make sure we can access the content and parity files
+$config["SnapRAIDContentFiles"] = $config["SnapRAIDContentFiles"].Split(",")
+$config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].Split(",")
 
 Check-Content-Files
 
-if (!($config["SkipParityFilesAtStart"]) -or ($config["SkipParityFilesAtStart"] -ne 1) ) { 
+if (!($config["SkipParityFilesAtStart"]) -or ($config["SkipParityFilesAtStart"] -ne 1)) {
 	Start-Pre-Process
 	Check-Parity-Files
 }
@@ -766,23 +799,27 @@ $CurrentDate = Get-Date
 $message = "SnapRAID $argument1 Job started on $CurrentDate"
 WriteExtendedLogFile $message
 
-If ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
+if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
-	If ($global:Diffchanges -eq 1){
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($global:Diffchanges -eq 1) {
+		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 			Start-Pre-Process
 			Check-Parity-Files
 		}
+
 		# If enabled take services offline
 		ServiceManagement "stop"
 		$argument = "sync"
 		RunSnapraid $argument
 	}
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 		Start-Pre-Process
 		Check-Parity-Files
 	}
+
 	# If enabled take services offline
 	ServiceManagement "stop"
 	$argument = "check"
@@ -793,62 +830,72 @@ If ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
 	Start-Post-Process
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
-}
-ElseIf ($Argument1 -eq "syncandscrub" -and $SomethingDone -ne 1) {
+
+} elseif ($Argument1 -eq "syncandscrub" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
-	If ($global:Diffchanges -eq 1){
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($global:Diffchanges -eq 1) {
+		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 			Start-Pre-Process
 			Check-Parity-Files
 		}
+
 		# If enabled take services offline
 		ServiceManagement "stop"
 		$argument = "sync"
 		RunSnapraid $argument
 	}
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 		Start-Pre-Process
 		Check-Parity-Files
 	}
+
 	# If enabled take services offline
 	ServiceManagement "stop"
 	$argument = "scrub"
 	RunSnapraid $argument
+
 	if ($config["SnapRAIDStatusAfterScrub"] -eq 1) {
 		$argument = "status"
 		RunSnapraid $argument
 	}
+
 	# If enabled bring services back online
 	ServiceManagement "start"
 	$CurrentDate = Get-Date
 	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
 	Start-Post-Process
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
-}
-ElseIf ($Argument1 -eq "syncandfix" -and $SomethingDone -ne 1) {
+
+} elseif ($Argument1 -eq "syncandfix" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
-	If ($global:Diffchanges -eq 1){
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($global:Diffchanges -eq 1) {
+		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 			Start-Pre-Process
 			Check-Parity-Files
 		}
+
 		# If enabled take services offline
 		ServiceManagement "stop"
 		$argument = "sync"
 		RunSnapraid $argument
 	}
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 		Start-Pre-Process
 		Check-Parity-Files
 	}
+
 	# If enabled take services offline
 	ServiceManagement "stop"
 	$argument = "fix"
@@ -859,27 +906,31 @@ ElseIf ($Argument1 -eq "syncandfix" -and $SomethingDone -ne 1) {
 	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
 	Start-Post-Process
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
-}
-ElseIf ($Argument1 -eq "syncandfullscrub" -and $SomethingDone -ne 1) {
+
+} elseif ($Argument1 -eq "syncandfullscrub" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
-	If ($global:Diffchanges -eq 1){
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($global:Diffchanges -eq 1) {
+		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 			Start-Pre-Process
 			Check-Parity-Files
 		}
+
 		# If enabled take services offline
 		ServiceManagement "stop"
 		$argument = "sync"
 		RunSnapraid $argument
 	}
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 		Start-Pre-Process
 		Check-Parity-Files
 	}
+
 	# If enabled take services offline
 	ServiceManagement "stop"
 	$argument = "fullscrub"
@@ -890,18 +941,19 @@ ElseIf ($Argument1 -eq "syncandfullscrub" -and $SomethingDone -ne 1) {
 	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
 	Start-Post-Process
-	$subject = $config["SubjectPrefix"]+" "+$message
+	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
 }
 
-If ($SomethingDone -ne 1){
+if ($SomethingDone -ne 1) {
 	# If another command was passed to the script run this command, else run the sync command
-	If ($Argument1 -ne "sync") {
-		If (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0)){ 
+	if ($Argument1 -ne "sync") {
+		if (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0)) {
 			Start-Pre-Process
 			Check-Parity-Files
 		}
+
 		# If enabled take services offline
 		ServiceManagement "stop"
 		$argument = $Argument1
@@ -912,18 +964,20 @@ If ($SomethingDone -ne 1){
 		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $CurrentDate"
 		WriteExtendedLogFile $message
 		Start-Post-Process
-		$subject = $config["SubjectPrefix"]+" "+$message
+		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "success" $EmailBody
 		$SomethingDone = 1
-	}
-	else {
+
+	} else {
 		$argument = "diff"
 		RunSnapraid $argument
-		If ($global:Diffchanges -eq 1){
-			if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0){ 
+
+		if ($global:Diffchanges -eq 1) {
+			if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
 				Start-Pre-Process
 				Check-Parity-Files
 			}
+
 			# If enabled take services offline
 			ServiceManagement "stop"
 			$argument = "sync"
@@ -934,21 +988,22 @@ If ($SomethingDone -ne 1){
 			$message = "SUCCESS: SnapRAID SYNC Job finished on $CurrentDate"
 			WriteExtendedLogFile $message
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" "+$message
+			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
-		}
-		else {
+
+		} else {
 			# NO, so lets log it and exit
 			$CurrentDate = Get-Date
 			$message = "$CurrentDate No change detected. Nothing to do"
 			WriteExtendedLogFile $message
 			Start-Post-Process
-			$subject = $config["SubjectPrefix"]+" SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
+			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
 		}
 	}
 }
+
 # End Transcript
-Stop-Transcript | out-null
+Stop-Transcript | Out-Null
