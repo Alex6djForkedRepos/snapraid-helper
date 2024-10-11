@@ -57,7 +57,7 @@ function Test-IsAdmin {
 	return 1
 }
 
-function Start-Pre-Process {
+function Invoke-PreProcess {
 	# If Process Management is enabled, then start Pre Process
 	if ($config["ProcessEnable"] -eq 1) {
 		# timestamp the job
@@ -71,7 +71,7 @@ function Start-Pre-Process {
 			$CurrentDate = Get-Date
 			$message = "ERROR: Pre-Process failed on $CurrentDate with exit code $LastExitCode"
 			WriteLogFile $message
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -85,7 +85,7 @@ function Start-Pre-Process {
 	}
 }
 
-function Start-Post-Process {
+function Invoke-PostProcess {
 	# If Process Management is enabled, then start Post Process
 	if ($config["ProcessEnable"] -eq 1) {
 		if ($global:PreProcessHasRun -eq 1) {
@@ -224,13 +224,13 @@ function Send-Email ($fSubject, $fSuccess, $EmailBody) {
 	Write-EventLog -LogName Application -Source SnapRaid-Helper -EventId $EventlogID -Message $fSubject
 }
 
-function Check-Content-Files {
+function Test-ContentFiles {
 	foreach ($element in $config["SnapRAIDContentFiles"]) {
 		if (!(Test-Path $element)) {
 			$message = "ERROR: Content file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -239,13 +239,13 @@ function Check-Content-Files {
 	}
 }
 
-function Check-Parity-Files {
+function Test-ParityFiles {
 	foreach ($element in $config["SnapRAIDParityFiles"]) {
 		if (!(Test-Path $element)) {
 			$message = "ERROR: Parity file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -401,7 +401,7 @@ function RunSnapraid ($sargument) {
 				Write-Host $line
 			}
 
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -443,7 +443,7 @@ function DiffAnalyze {
 				$message = "WARNING: Number of deleted files ($DEL_COUNT) exceeded threshold (" + $config["SnapRAIDDelThreshold"] + "). NOT proceeding with job. Please run manually if this is not an error condition."
 				Write-Host $message
 				Add-Content $EmailBody $message
-				Start-Post-Process
+				Invoke-PostProcess
 				$subject = $config["SubjectPrefix"] + " " + $message
 				Send-Email $subject "error" $EmailBody
 				Stop-Transcript | Out-Null
@@ -787,11 +787,11 @@ if (($EventLogCount -ge 1) -and ($config["EventLogHaltOnDiskError"] -eq 1)) {
 $config["SnapRAIDContentFiles"] = $config["SnapRAIDContentFiles"].Split(",")
 $config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].Split(",")
 
-Check-Content-Files
+Test-ContentFiles
 
 if (!($config["SkipParityFilesAtStart"]) -or ($config["SkipParityFilesAtStart"] -ne 1)) {
-	Start-Pre-Process
-	Check-Parity-Files
+	Invoke-PreProcess
+	Test-ParityFiles
 }
 
 # timestamp the job
@@ -805,8 +805,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	if ($global:Diffchanges -eq 1) {
 		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Start-Pre-Process
-			Check-Parity-Files
+			Invoke-PreProcess
+			Test-ParityFiles
 		}
 
 		# If enabled take services offline
@@ -816,8 +816,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	}
 
 	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-		Start-Pre-Process
-		Check-Parity-Files
+		Invoke-PreProcess
+		Test-ParityFiles
 	}
 
 	# If enabled take services offline
@@ -829,7 +829,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$CurrentDate = Get-Date
 	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
-	Start-Post-Process
+	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -840,8 +840,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	if ($global:Diffchanges -eq 1) {
 		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Start-Pre-Process
-			Check-Parity-Files
+			Invoke-PreProcess
+			Test-ParityFiles
 		}
 
 		# If enabled take services offline
@@ -851,8 +851,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	}
 
 	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-		Start-Pre-Process
-		Check-Parity-Files
+		Invoke-PreProcess
+		Test-ParityFiles
 	}
 
 	# If enabled take services offline
@@ -870,7 +870,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$CurrentDate = Get-Date
 	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
-	Start-Post-Process
+	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -881,8 +881,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	if ($global:Diffchanges -eq 1) {
 		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Start-Pre-Process
-			Check-Parity-Files
+			Invoke-PreProcess
+			Test-ParityFiles
 		}
 
 		# If enabled take services offline
@@ -892,8 +892,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	}
 
 	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-		Start-Pre-Process
-		Check-Parity-Files
+		Invoke-PreProcess
+		Test-ParityFiles
 	}
 
 	# If enabled take services offline
@@ -905,7 +905,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$CurrentDate = Get-Date
 	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
-	Start-Post-Process
+	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -916,8 +916,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	if ($global:Diffchanges -eq 1) {
 		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Start-Pre-Process
-			Check-Parity-Files
+			Invoke-PreProcess
+			Test-ParityFiles
 		}
 
 		# If enabled take services offline
@@ -927,8 +927,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	}
 
 	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-		Start-Pre-Process
-		Check-Parity-Files
+		Invoke-PreProcess
+		Test-ParityFiles
 	}
 
 	# If enabled take services offline
@@ -940,7 +940,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$CurrentDate = Get-Date
 	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $CurrentDate"
 	WriteExtendedLogFile $message
-	Start-Post-Process
+	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -950,8 +950,8 @@ if ($SomethingDone -ne 1) {
 	# If another command was passed to the script run this command, else run the sync command
 	if ($Argument1 -ne "sync") {
 		if (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0)) {
-			Start-Pre-Process
-			Check-Parity-Files
+			Invoke-PreProcess
+			Test-ParityFiles
 		}
 
 		# If enabled take services offline
@@ -963,7 +963,7 @@ if ($SomethingDone -ne 1) {
 		$CurrentDate = Get-Date
 		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $CurrentDate"
 		WriteExtendedLogFile $message
-		Start-Post-Process
+		Invoke-PostProcess
 		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "success" $EmailBody
 		$SomethingDone = 1
@@ -974,8 +974,8 @@ if ($SomethingDone -ne 1) {
 
 		if ($global:Diffchanges -eq 1) {
 			if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-				Start-Pre-Process
-				Check-Parity-Files
+				Invoke-PreProcess
+				Test-ParityFiles
 			}
 
 			# If enabled take services offline
@@ -987,7 +987,7 @@ if ($SomethingDone -ne 1) {
 			$CurrentDate = Get-Date
 			$message = "SUCCESS: SnapRAID SYNC Job finished on $CurrentDate"
 			WriteExtendedLogFile $message
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
@@ -997,7 +997,7 @@ if ($SomethingDone -ne 1) {
 			$CurrentDate = Get-Date
 			$message = "$CurrentDate No change detected. Nothing to do"
 			WriteExtendedLogFile $message
-			Start-Post-Process
+			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
