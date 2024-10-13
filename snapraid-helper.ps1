@@ -119,102 +119,64 @@ function Send-Email ($fSubject, $fSuccess, $EmailBody) {
 	# $fSuccess -- "success" = success email, "error" = error email, "error2" = error email script/snapraid running
 	$Body = ""
 
-	if ($fSuccess -eq "success") {
-		$EventlogID = 4711
+	$EventlogID = switch ($fSuccess) {
+		"success" { 4711 }
+		"error"   { 4712 }
+		"error2"  { 4712 }
 	}
 
-	if ($fSuccess -eq "error") {
-		$EventlogID = 4712
-	}
+	if ($config["IncludeExtendedInfoZip"] -eq 1 -and $fSuccess -ne "error2") {
+		if (Test-Path $EmailBodyTmp) {
+			Rename-Item "$EmailBodyTmp" "$EmailBodyTxt"
+		}
 
-	if ($fSuccess -eq "error2") {
-		$EventlogID = 4712
-	}
+		if (Test-Path "$EmailBodyTxt") {
+			$file = Get-Item "$EmailBodyTxt"
 
-	if ($fSuccess -ne "error2") {
-		if ($config["IncludeExtendedInfoZip"] -eq 1) {
-			if (Test-Path $EmailBodyTmp) {
-				Rename-Item "$EmailBodyTmp" "$EmailBodyTxt"
-			}
-
-			if (Test-Path "$EmailBodyTxt") {
-				$file = Get-Item "$EmailBodyTxt"
-
-				if ($file.length -ge $config["LogFileMaxSizeZIP"]) {
-					Write-zip -Path "$EmailBodyTxt" -OutputPath "$EmailBodyZip" -level 9 -Quiet
-				} else {
-					$EmailBodyZip = $EmailBodyTxt
-				}
+			if ($file.length -ge $config["LogFileMaxSizeZIP"]) {
+				Write-zip -Path "$EmailBodyTxt" -OutputPath "$EmailBodyZip" -level 9 -Quiet
+			} else {
+				$EmailBodyZip = $EmailBodyTxt
 			}
 		}
 	}
 
-	if (($fSuccess -eq "success") -and ($config["EmailOnSuccess"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
-		if ($config["IncludeExtendedInfo"] -eq 1) {
-			$Body = (Get-Content $EmailBody | Out-String)
-		}
+	if ($config["EmailEnable"] -eq 1) {
+		if (($fSuccess -eq "success" -and $config["EmailOnSuccess"] -eq 1) -or
+			($fSuccess -eq "error" -and $config["EmailOnError"] -eq 1))
+		{
+			if ($config["IncludeExtendedInfo"] -eq 1) {
+				$Body = (Get-Content $EmailBody | Out-String)
+			}
 
-		if ($config["IncludeExtendedInfoZip"] -eq 1) {
-			if (Test-Path $EmailBodyZip) {
-				if ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]) {
-					if (Test-Path $EmailBodyZip) {
-						$att = New-Object Net.Mail.Attachment ($EmailBodyZip)
-						$MailMessage.Attachments.Add($att)
+			if ($config["IncludeExtendedInfoZip"] -eq 1) {
+				if (Test-Path $EmailBodyZip) {
+					if ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]) {
+						if (Test-Path $EmailBodyZip) {
+							$att = New-Object Net.Mail.Attachment ($EmailBodyZip)
+							$MailMessage.Attachments.Add($att)
+						}
+					} else {
+						Add-Content $EmailBody "LOG FILE TOO LARGE TO ATTACH"
 					}
-				} else {
-					Add-Content $EmailBody "LOG FILE TOO LARGE TO ATTACH"
 				}
+
+				$Body = (Get-Content $EmailBody | Out-String)
 			}
 
-			$Body = (Get-Content $EmailBody | Out-String)
-		}
+			$MailMessage.Subject = $fSubject
+			$Mailmessage.Body = $Body
+			$smtpclient.Send($MailMessage)
 
-		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body = $Body
-		$smtpclient.Send($MailMessage)
-
-		if ($config["IncludeExtendedInfoZip"] -eq 1) {
-			if (Test-Path $EmailBodyZip) {
+			if ($config["IncludeExtendedInfoZip"] -eq 1 -and (Test-Path $EmailBodyZip)) {
 				$att.Dispose()
 			}
+
+		} elseif ($fSuccess -eq "error2" -and $config["EmailOnError"] -eq 1) {
+			$MailMessage.Subject = $fSubject
+			$Mailmessage.Body = $fSubject
+			$smtpclient.Send($MailMessage)
 		}
-	}
-
-	if (($fSuccess -eq "error") -and ($config["EmailOnError"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
-		if ($config["IncludeExtendedInfo"] -eq 1) {
-			$Body = (Get-Content $EmailBody | Out-String)
-		}
-
-		if ($config["IncludeExtendedInfoZip"] -eq 1) {
-			if (Test-Path $EmailBodyZip) {
-				if ((Get-Item $EmailBodyZip).length -le $config["MaxAttachSize"]) {
-					if (Test-Path $EmailBodyZip) {
-						$att = New-Object Net.Mail.Attachment ($EmailBodyZip)
-						$MailMessage.Attachments.Add($att)
-					}
-				} else {
-					Add-Content $EmailBody "LOG FILE TOO LARGE TO ATTACH"
-				}
-			}
-
-			$Body = (Get-Content $EmailBody | Out-String)
-		}
-
-		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body = $Body
-		$smtpclient.Send($MailMessage)
-
-		if ($config["IncludeExtendedInfoZip"] -eq 1) {
-			if (Test-Path $EmailBodyZip) {
-				$att.Dispose()
-			}
-		}
-	}
-
-	if (($fSuccess -eq "error2") -and ($config["EmailOnError"] -eq 1) -and ($config["EmailEnable"] -eq 1)) {
-		$MailMessage.Subject = $fSubject
-		$Mailmessage.Body = $fSubject
-		$smtpclient.Send($MailMessage)
 	}
 
 	if (!(Get-EventLog -Source SnapRaid-Helper -LogName Application -ErrorAction SilentlyContinue)) {
