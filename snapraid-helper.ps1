@@ -40,6 +40,8 @@ $global:ServicesStopped = 0
 $global:Diffchanges = 99
 $SomethingDone = 0
 $HomePath = $MyInvocation.Line | Split-Path
+# General date/time format; short date, long time i.e. 'dd/MM/yyyy HH:mm:ss' but in system locale
+$DateFormat = "G"
 $message = ""
 $ConfigError = 0
 
@@ -57,19 +59,22 @@ function Test-IsAdmin {
 	return 1
 }
 
+function Get-CurrentDate {
+	$CurrentDate = Get-Date -Format $DateFormat
+	return $CurrentDate.ToString()
+}
+
 function Invoke-PreProcess {
 	# If Process Management is enabled, then start Pre Process
 	if ($config["ProcessEnable"] -eq 1) {
 		# timestamp the job
-		$CurrentDate = Get-Date
-		$message = "Starting Pre-Process $CurrentDate"
+		$message = "Starting Pre-Process $(Get-CurrentDate)"
 		WriteLogFile $message
 		$exe = $config["ProcessPre"]
 		& "$exe" | Out-Null
 
 		if (!($LastExitCode -eq "0")) {
-			$CurrentDate = Get-Date
-			$message = "ERROR: Pre-Process failed on $CurrentDate with exit code $LastExitCode"
+			$message = "ERROR: Pre-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
 			WriteLogFile $message
 			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
@@ -77,8 +82,7 @@ function Invoke-PreProcess {
 			Stop-Transcript | Out-Null
 			exit 1
 		} else {
-			$CurrentDate = Get-Date
-			$message = "Done Starting Pre-Process $CurrentDate"
+			$message = "Done Starting Pre-Process $(Get-CurrentDate)"
 			WriteLogFile $message
 			$global:PreProcessHasRun = 1
 		}
@@ -90,23 +94,20 @@ function Invoke-PostProcess {
 	if ($config["ProcessEnable"] -eq 1) {
 		if ($global:PreProcessHasRun -eq 1) {
 			# timestamp the job
-			$CurrentDate = Get-Date
-			$message = "Starting Post-Process $CurrentDate"
+			$message = "Starting Post-Process $(Get-CurrentDate)"
 			WriteLogFile $message
 			$exe = $config["ProcessPost"]
 			& "$exe" | Out-Null
 
 			if (!($LastExitCode -eq "0")) {
-				$CurrentDate = Get-Date
-				$message = "ERROR: Post-Process failed on $CurrentDate with exit code $LastExitCode"
+				$message = "ERROR: Post-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
 				WriteLogFile $message
 				$subject = $config["SubjectPrefix"] + " " + $message
 				Send-Email $subject "error" $EmailBody
 				Stop-Transcript | Out-Null
 				exit 1
 			} else {
-				$CurrentDate = Get-Date
-				$message = "Done Starting Post-Process $CurrentDate"
+				$message = "Done Starting Post-Process $(Get-CurrentDate)"
 				WriteLogFile $message
 			}
 		}
@@ -245,8 +246,7 @@ function ServiceManagement ($startstop) {
 		# If Service Management is enabled, then take services offline
 		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStopped -ne 1) {
 			# timestamp the job
-			$CurrentDate = Get-Date
-			$message = "Stopping Services $CurrentDate"
+			$message = "Stopping Services $(Get-CurrentDate)"
 			WriteLogFile $message
 
 			foreach ($service in $ServiceList) {
@@ -255,8 +255,7 @@ function ServiceManagement ($startstop) {
 			}
 
 			# timestamp the job
-			$CurrentDate = Get-Date
-			$message = "Done Stopping Services $CurrentDate"
+			$message = "Done Stopping Services $(Get-CurrentDate)"
 			WriteLogFile $message
 			$global:ServicesStopped = 1
 		}
@@ -266,8 +265,7 @@ function ServiceManagement ($startstop) {
 		# If Service Management is enabled, then bring services back online
 		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStarted -ne 1 -and $global:ServicesStopped -eq 1) {
 			# timestamp the job
-			$CurrentDate = Get-Date
-			$message = "Starting Services $CurrentDate"
+			$message = "Starting Services $(Get-CurrentDate)"
 			WriteLogFile $message
 
 			foreach ($service in $ServiceList) {
@@ -276,8 +274,7 @@ function ServiceManagement ($startstop) {
 			}
 
 			# timestamp the job
-			$CurrentDate = Get-Date
-			$message = "Done Starting Services $CurrentDate"
+			$message = "Done Starting Services $(Get-CurrentDate)"
 			WriteLogFile $message
 			$global:ServicesStarted = 1
 		}
@@ -346,8 +343,7 @@ function RunSnapraid ($sargument) {
 	{
 		# If enabled bring services back online
 		ServiceManagement "start"
-		$CurrentDate = Get-Date
-		$message = "ERROR: SnapRAID $sargument Job FAILED on $CurrentDate with exit code $LastExitCode"
+		$message = "ERROR: SnapRAID $sargument Job FAILED on $(Get-CurrentDate) with exit code $LastExitCode"
 		WriteExtendedLogFile $message
 		$message2 = "Including detailed SnapRAID Log"
 		WriteExtendedLogFile $message2
@@ -372,8 +368,7 @@ function RunSnapraid ($sargument) {
 	}
 
 	# Job was successful, move onto processing.
-	$CurrentDate = Get-Date
-	$message = "SnapRAID $sargument Job finished on $CurrentDate"
+	$message = "SnapRAID $sargument Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
 
 	if ($sargument -eq "diff") {
@@ -415,16 +410,14 @@ function DiffAnalyze {
 				$message = "Deleted files ($DEL_COUNT) did not exceed threshold (" + $config["SnapRAIDDelThreshold"] + "), proceeding with job."
 				Write-Host $message
 				Add-Content $EmailBody $message
-				$CurrentDate = Get-Date
-				$message = "$CurrentDate Changes detected [A-$ADD_COUNT,D-$DEL_COUNT,M-$MOVE_COUNT,U-$UPDATE_COUNT] and deleted files ($DEL_COUNT) is below threshold (" + $config["SnapRAIDDelThreshold"] + "). Running Command."
+				$message = "$(Get-CurrentDate) Changes detected [A-$ADD_COUNT,D-$DEL_COUNT,M-$MOVE_COUNT,U-$UPDATE_COUNT] and deleted files ($DEL_COUNT) is below threshold (" + $config["SnapRAIDDelThreshold"] + "). Running Command."
 				Write-Host $message
 				Add-Content $EmailBody $message
 				$global:Diffchanges = 1
 			}
 		} else {
 			# NO, so lets log it and exit
-			$CurrentDate = Get-Date
-			$message = "$CurrentDate No change detected. Nothing to do"
+			$message = "$(Get-CurrentDate) No change detected. Nothing to do"
 			WriteExtendedLogFile $message
 			$global:Diffchanges = 0
 		}
@@ -620,8 +613,7 @@ $SnapRAIDLogfile = $config["TmpOutputPath"] + "snapRAIDerror.out"
 # Note that the detection for running script only works if it is called with the script as a parameter
 # for example powershell.exe snapraid-helper.ps1 - but not if the script is called like .\snapraid-helper.ps1
 if ($Scriptrunning -match "Handle") {
-	$CurrentDate = Get-Date
-	$message = "ERROR: Another instance of the script is still running! $Argument1 can't run on $CurrentDate"
+	$message = "ERROR: Another instance of the script is still running! $Argument1 can't run on $(Get-CurrentDate)"
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
@@ -631,8 +623,7 @@ if ($Scriptrunning -match "Handle") {
 }
 
 if ($Snapraidrunning -match "Handle") {
-	$CurrentDate = Get-Date
-	$message = "ERROR: Another instance of snapraid is still running! $Argument1 can't run on $CurrentDate"
+	$message = "ERROR: Another instance of snapraid is still running! $Argument1 can't run on $(Get-CurrentDate)"
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
@@ -717,8 +708,7 @@ $ErrorActionPreference = "Continue"
 Start-Transcript -Path $LogFile -Append
 
 # Check Eventlog for Errors
-$CurrentDate = Get-Date
-$message = "Checking for Disk issues in Eventlog at $CurrentDate"
+$message = "Checking for Disk issues in Eventlog at $(Get-CurrentDate)"
 WriteLogFile $message
 
 $EventLogOutput = Get-EventLog -LogName system -EntryType $EventLogEntryTypeList -Source $EventLogSourcesList -After (Get-Date).AddDays($config["EventLogdays"])
@@ -757,8 +747,7 @@ if (!($config["SkipParityFilesAtStart"]) -or ($config["SkipParityFilesAtStart"] 
 }
 
 # timestamp the job
-$CurrentDate = Get-Date
-$message = "SnapRAID $argument1 Job started on $CurrentDate"
+$message = "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
 WriteExtendedLogFile $message
 
 if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
@@ -788,8 +777,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	RunSnapraid $argument
 	# If enabled bring services back online
 	ServiceManagement "start"
-	$CurrentDate = Get-Date
-	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $CurrentDate"
+	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
 	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
@@ -829,8 +817,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	# If enabled bring services back online
 	ServiceManagement "start"
-	$CurrentDate = Get-Date
-	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $CurrentDate"
+	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
 	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
@@ -864,8 +851,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	RunSnapraid $argument
 	# If enabled bring services back online
 	ServiceManagement "start"
-	$CurrentDate = Get-Date
-	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $CurrentDate"
+	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
 	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
@@ -899,8 +885,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	RunSnapraid $argument
 	# If enabled bring services back online
 	ServiceManagement "start"
-	$CurrentDate = Get-Date
-	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $CurrentDate"
+	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
 	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
@@ -922,8 +907,7 @@ if ($SomethingDone -ne 1) {
 		RunSnapraid $argument
 		# If enabled bring services back online
 		ServiceManagement "start"
-		$CurrentDate = Get-Date
-		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $CurrentDate"
+		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
 		Invoke-PostProcess
 		$subject = $config["SubjectPrefix"] + " " + $message
@@ -946,8 +930,7 @@ if ($SomethingDone -ne 1) {
 			RunSnapraid $argument
 			# If enabled bring services back online
 			ServiceManagement "start"
-			$CurrentDate = Get-Date
-			$message = "SUCCESS: SnapRAID SYNC Job finished on $CurrentDate"
+			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate)"
 			WriteExtendedLogFile $message
 			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
@@ -956,8 +939,7 @@ if ($SomethingDone -ne 1) {
 
 		} else {
 			# NO, so lets log it and exit
-			$CurrentDate = Get-Date
-			$message = "$CurrentDate No change detected. Nothing to do"
+			$message = "$(Get-CurrentDate) No change detected. Nothing to do"
 			WriteExtendedLogFile $message
 			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
