@@ -379,34 +379,34 @@ function RunSnapraid ($sargument) {
 		}
 	}
 
-	if (!($LastExitCode -eq "0")) {
-		if (!(($LastExitCode -eq "2") -and ($sargument = "diff"))) {
-			# If enabled bring services back online
-			ServiceManagement "start"
-			$CurrentDate = Get-Date
-			$message = "ERROR: SnapRAID $sargument Job FAILED on $CurrentDate with exit code $LastExitCode"
-			WriteExtendedLogFile $message
-			$message2 = "Including detailed SnapRAID Log"
-			WriteExtendedLogFile $message2
-			$SnapRAIDLogfileInRAM = (Get-Content $SnapRAIDLogfile | Out-String)
+	if ($LastExitCode -ne "0" -and
+		!($LastExitCode -eq "2" -and $sargument -eq "diff"))
+	{
+		# If enabled bring services back online
+		ServiceManagement "start"
+		$CurrentDate = Get-Date
+		$message = "ERROR: SnapRAID $sargument Job FAILED on $CurrentDate with exit code $LastExitCode"
+		WriteExtendedLogFile $message
+		$message2 = "Including detailed SnapRAID Log"
+		WriteExtendedLogFile $message2
+		$SnapRAIDLogfileInRAM = (Get-Content $SnapRAIDLogfile | Out-String)
 
-			if ($config["IncludeExtendedInfoZip"] -eq 1) {
-				$FileToAdd = $EmailBodyTmp
-			} else {
-				$FileToAdd = $EmailBody
-			}
-
-			foreach ($line in $SnapRAIDLogfileInRAM) {
-				Add-Content $FileToAdd $line
-				Write-Host $line
-			}
-
-			Invoke-PostProcess
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "error" $EmailBody
-			Stop-Transcript | Out-Null
-			exit 1
+		if ($config["IncludeExtendedInfoZip"] -eq 1) {
+			$FileToAdd = $EmailBodyTmp
+		} else {
+			$FileToAdd = $EmailBody
 		}
+
+		foreach ($line in $SnapRAIDLogfileInRAM) {
+			Add-Content $FileToAdd $line
+			Write-Host $line
+		}
+
+		Invoke-PostProcess
+		$subject = $config["SubjectPrefix"] + " " + $message
+		Send-Email $subject "error" $EmailBody
+		Stop-Transcript | Out-Null
+		exit 1
 	}
 
 	# Job was successful, move onto processing.
