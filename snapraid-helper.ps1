@@ -739,11 +739,6 @@ $config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].Split(",")
 
 Test-ContentFiles
 
-if (!($config["SkipParityFilesAtStart"]) -or ($config["SkipParityFilesAtStart"] -ne 1)) {
-	Invoke-PreProcess
-	Test-ParityFiles
-}
-
 # timestamp the job
 $message = "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
 WriteExtendedLogFile $message
@@ -752,25 +747,19 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:Diffchanges -eq 1) {
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Invoke-PreProcess
-			Test-ParityFiles
-		}
-
-		# If enabled take services offline
-		ServiceManagement "stop"
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
+	if ($global:PreProcessHasRun -eq 0) {
 		Invoke-PreProcess
 		Test-ParityFiles
 	}
 
 	# If enabled take services offline
 	ServiceManagement "stop"
+
+	if ($global:Diffchanges -eq 1) {
+		$argument = "sync"
+		RunSnapraid $argument
+	}
+
 	$argument = "check"
 	RunSnapraid $argument
 	# If enabled bring services back online
@@ -786,25 +775,19 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:Diffchanges -eq 1) {
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Invoke-PreProcess
-			Test-ParityFiles
-		}
-
-		# If enabled take services offline
-		ServiceManagement "stop"
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
+	if ($global:PreProcessHasRun -eq 0) {
 		Invoke-PreProcess
 		Test-ParityFiles
 	}
 
 	# If enabled take services offline
 	ServiceManagement "stop"
+
+	if ($global:Diffchanges -eq 1) {
+		$argument = "sync"
+		RunSnapraid $argument
+	}
+
 	$argument = "scrub"
 	RunSnapraid $argument
 
@@ -826,25 +809,19 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:Diffchanges -eq 1) {
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Invoke-PreProcess
-			Test-ParityFiles
-		}
-
-		# If enabled take services offline
-		ServiceManagement "stop"
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
+	if ($global:PreProcessHasRun -eq 0) {
 		Invoke-PreProcess
 		Test-ParityFiles
 	}
 
 	# If enabled take services offline
 	ServiceManagement "stop"
+
+	if ($global:Diffchanges -eq 1) {
+		$argument = "sync"
+		RunSnapraid $argument
+	}
+
 	$argument = "fix"
 	RunSnapraid $argument
 	# If enabled bring services back online
@@ -860,25 +837,19 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:Diffchanges -eq 1) {
-		if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
-			Invoke-PreProcess
-			Test-ParityFiles
-		}
-
-		# If enabled take services offline
-		ServiceManagement "stop"
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
+	if ($global:PreProcessHasRun -eq 0) {
 		Invoke-PreProcess
 		Test-ParityFiles
 	}
 
 	# If enabled take services offline
 	ServiceManagement "stop"
+
+	if ($global:Diffchanges -eq 1) {
+		$argument = "sync"
+		RunSnapraid $argument
+	}
+
 	$argument = "fullscrub"
 	RunSnapraid $argument
 	# If enabled bring services back online
@@ -894,7 +865,9 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 if ($SomethingDone -ne 1) {
 	# If another command was passed to the script run this command, else run the sync command
 	if ($Argument1 -ne "sync") {
-		if (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0)) {
+		if (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and
+			$global:PreProcessHasRun -eq 0)
+		{
 			Invoke-PreProcess
 			Test-ParityFiles
 		}
@@ -917,7 +890,7 @@ if ($SomethingDone -ne 1) {
 		RunSnapraid $argument
 
 		if ($global:Diffchanges -eq 1) {
-			if ($config["SkipParityFilesAtStart"] -eq 1 -and $global:PreProcessHasRun -eq 0) {
+			if ($global:PreProcessHasRun -eq 0) {
 				Invoke-PreProcess
 				Test-ParityFiles
 			}
