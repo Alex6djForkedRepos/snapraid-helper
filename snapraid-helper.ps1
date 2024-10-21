@@ -90,13 +90,41 @@ function Invoke-PreRun {
 
 	Test-ParityFiles
 
-	# If enabled take services offline
-	ServiceManagement "stop"
+	# If Service Management is enabled, then take services offline
+	if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStopped -ne 1) {
+		# timestamp the job
+		$message = "Stopping Services $(Get-CurrentDate)"
+		WriteLogFile $message
+
+		foreach ($service in $ServiceList) {
+			$message = Stop-Service $service
+			WriteLogFile $message
+		}
+
+		# timestamp the job
+		$message = "Done Stopping Services $(Get-CurrentDate)"
+		WriteLogFile $message
+		$global:ServicesStopped = 1
+	}
 }
 
 function Invoke-PostRun {
-	# If enabled bring services back online
-	ServiceManagement "start"
+	# If Service Management is enabled, then bring services back online
+	if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStarted -ne 1 -and $global:ServicesStopped -eq 1) {
+		# timestamp the job
+		$message = "Starting Services $(Get-CurrentDate)"
+		WriteLogFile $message
+
+		foreach ($service in $ServiceList) {
+			$message = Start-Service $service
+			WriteLogFile $message
+		}
+
+		# timestamp the job
+		$message = "Done Starting Services $(Get-CurrentDate)"
+		WriteLogFile $message
+		$global:ServicesStarted = 1
+	}
 
 	# If Process Management is enabled, then start Post Process
 	if ($config["ProcessEnable"] -eq 1 -and
@@ -246,46 +274,6 @@ function WriteExtendedLogFile ($ftext) {
 		Add-Content $EmailBodyTmp "----------------------------------------"
 		Add-Content $EmailBodyTmp $ftext
 		Add-Content $EmailBodyTmp "----------------------------------------"
-	}
-}
-
-function ServiceManagement ($startstop) {
-	if ($startstop -eq "stop") {
-		# If Service Management is enabled, then take services offline
-		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStopped -ne 1) {
-			# timestamp the job
-			$message = "Stopping Services $(Get-CurrentDate)"
-			WriteLogFile $message
-
-			foreach ($service in $ServiceList) {
-				$message = Stop-Service $service
-				WriteLogFile $message
-			}
-
-			# timestamp the job
-			$message = "Done Stopping Services $(Get-CurrentDate)"
-			WriteLogFile $message
-			$global:ServicesStopped = 1
-		}
-	}
-
-	if ($startstop -eq "start") {
-		# If Service Management is enabled, then bring services back online
-		if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStarted -ne 1 -and $global:ServicesStopped -eq 1) {
-			# timestamp the job
-			$message = "Starting Services $(Get-CurrentDate)"
-			WriteLogFile $message
-
-			foreach ($service in $ServiceList) {
-				$message = Start-Service $service
-				WriteLogFile $message
-			}
-
-			# timestamp the job
-			$message = "Done Starting Services $(Get-CurrentDate)"
-			WriteLogFile $message
-			$global:ServicesStarted = 1
-		}
 	}
 }
 
