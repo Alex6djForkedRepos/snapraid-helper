@@ -27,8 +27,6 @@ param(
 
 $Argument1 = $Argument1.ToLower()
 
-$env:PSModulePath = $env:PSModulePath + ";C:\Program Files (x86)\PowerShell Community Extensions\Pscx3"
-
 $Scriptname = $MyInvocation.MyCommand.Name
 #$Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%'"
 $Scriptrunning = Get-WmiObject win32_process -Filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
@@ -135,7 +133,7 @@ function Send-Email ($fSubject, $fSuccess, $EmailBody) {
 			$file = Get-Item "$EmailBodyTxt"
 
 			if ($file.length -ge $config["LogFileMaxSizeZIP"]) {
-				Write-zip -Path "$EmailBodyTxt" -OutputPath "$EmailBodyZip" -level 9 -Quiet
+				Compress-Archive -Path "$EmailBodyTxt" -DestinationPath "$EmailBodyZip" -CompressionLevel Optimal -Force
 			} else {
 				$EmailBodyZip = $EmailBodyTxt
 			}
@@ -691,7 +689,7 @@ if (Test-Path "$LogFile") {
 				$i = $i - 1
 			}
 
-			Write-zip "$LogFile" -level 9
+			Compress-Archive -Path "$LogFile" -DestinationPath "$LogFile.zip" -CompressionLevel Optimal -Force
 			Rename-Item "$LogFile.zip" "$LogFile.1.zip"
 		}
 
