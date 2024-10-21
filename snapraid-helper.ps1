@@ -28,9 +28,8 @@ param(
 $Argument1 = $Argument1.ToLower()
 
 $Scriptname = $MyInvocation.MyCommand.Name
-#$Scriptrunning		= get-wmiobject win32_process -filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%'"
-$Scriptrunning = Get-WmiObject win32_process -Filter "name='powershell.exe'AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
-$Snapraidrunning = Get-WmiObject win32_process -Filter "name='snapraid.exe'"
+$ScriptRunning = Get-CimInstance -ClassName Win32_Process -Filter "name='powershell.exe' AND CommandLine LIKE '%$Scriptname%' AND NOT Handle LIKE '$PID'"
+$SnapraidRunning = Get-CimInstance -ClassName Win32_Process -Filter "name='snapraid.exe'"
 
 $global:PreProcessHasRun = 0
 $global:ServicesStarted = 0
@@ -606,7 +605,7 @@ $SnapRAIDLogfile = $config["TmpOutputPath"] + "snapRAIDerror.out"
 # Ensure only one Snapraid process and only one instance of this script is running
 # Note that the detection for running script only works if it is called with the script as a parameter
 # for example powershell.exe snapraid-helper.ps1 - but not if the script is called like .\snapraid-helper.ps1
-if ($Scriptrunning -match "Handle") {
+if ($ScriptRunning -match "Handle") {
 	$message = "ERROR: Another instance of the script is still running! $Argument1 can't run on $(Get-CurrentDate)"
 	Write-Host "----------------------------------------"
 	Write-Host $message
@@ -616,7 +615,7 @@ if ($Scriptrunning -match "Handle") {
 	exit 1
 }
 
-if ($Snapraidrunning -match "Handle") {
+if ($SnapraidRunning -match "Handle") {
 	$message = "ERROR: Another instance of snapraid is still running! $Argument1 can't run on $(Get-CurrentDate)"
 	Write-Host "----------------------------------------"
 	Write-Host $message
