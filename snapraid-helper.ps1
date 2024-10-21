@@ -62,9 +62,11 @@ function Get-CurrentDate {
 	return $CurrentDate.ToString()
 }
 
-function Invoke-PreProcess {
+function Invoke-PreRun {
 	# If Process Management is enabled, then start Pre Process
-	if ($config["ProcessEnable"] -eq 1) {
+	if ($config["ProcessEnable"] -eq 1 -and
+		$global:PreProcessHasRun -eq 0)
+	{
 		# timestamp the job
 		$message = "Starting Pre-Process $(Get-CurrentDate)"
 		WriteLogFile $message
@@ -72,9 +74,9 @@ function Invoke-PreProcess {
 		& "$exe" | Out-Null
 
 		if (!($LastExitCode -eq "0")) {
+			Invoke-PostRun
 			$message = "ERROR: Pre-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
 			WriteLogFile $message
-			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -85,29 +87,37 @@ function Invoke-PreProcess {
 			$global:PreProcessHasRun = 1
 		}
 	}
+
+	Test-ParityFiles
+
+	# If enabled take services offline
+	ServiceManagement "stop"
 }
 
-function Invoke-PostProcess {
-	# If Process Management is enabled, then start Post Process
-	if ($config["ProcessEnable"] -eq 1) {
-		if ($global:PreProcessHasRun -eq 1) {
-			# timestamp the job
-			$message = "Starting Post-Process $(Get-CurrentDate)"
-			WriteLogFile $message
-			$exe = $config["ProcessPost"]
-			& "$exe" | Out-Null
+function Invoke-PostRun {
+	# If enabled bring services back online
+	ServiceManagement "start"
 
-			if (!($LastExitCode -eq "0")) {
-				$message = "ERROR: Post-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
-				WriteLogFile $message
-				$subject = $config["SubjectPrefix"] + " " + $message
-				Send-Email $subject "error" $EmailBody
-				Stop-Transcript | Out-Null
-				exit 1
-			} else {
-				$message = "Done Starting Post-Process $(Get-CurrentDate)"
-				WriteLogFile $message
-			}
+	# If Process Management is enabled, then start Post Process
+	if ($config["ProcessEnable"] -eq 1 -and
+		$global:PreProcessHasRun -eq 1)
+	{
+		# timestamp the job
+		$message = "Starting Post-Process $(Get-CurrentDate)"
+		WriteLogFile $message
+		$exe = $config["ProcessPost"]
+		& "$exe" | Out-Null
+
+		if (!($LastExitCode -eq "0")) {
+			$message = "ERROR: Post-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
+			WriteLogFile $message
+			$subject = $config["SubjectPrefix"] + " " + $message
+			Send-Email $subject "error" $EmailBody
+			Stop-Transcript | Out-Null
+			exit 1
+		} else {
+			$message = "Done Starting Post-Process $(Get-CurrentDate)"
+			WriteLogFile $message
 		}
 	}
 }
@@ -188,10 +198,10 @@ function Send-Email ($fSubject, $fSuccess, $EmailBody) {
 function Test-ContentFiles {
 	foreach ($element in $config["SnapRAIDContentFiles"]) {
 		if (!(Test-Path $element)) {
+			Invoke-PostRun
 			$message = "ERROR: Content file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -203,10 +213,10 @@ function Test-ContentFiles {
 function Test-ParityFiles {
 	foreach ($element in $config["SnapRAIDParityFiles"]) {
 		if (!(Test-Path $element)) {
+			Invoke-PostRun
 			$message = "ERROR: Parity file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "error" $EmailBody
 			Stop-Transcript | Out-Null
@@ -339,8 +349,7 @@ function RunSnapraid ($sargument) {
 	if ($LastExitCode -ne "0" -and
 		!($LastExitCode -eq "2" -and $sargument -eq "diff"))
 	{
-		# If enabled bring services back online
-		ServiceManagement "start"
+		Invoke-PostRun
 		$message = "ERROR: SnapRAID $sargument Job FAILED on $(Get-CurrentDate) with exit code $LastExitCode"
 		WriteExtendedLogFile $message
 		$message2 = "Including detailed SnapRAID Log"
@@ -358,7 +367,6 @@ function RunSnapraid ($sargument) {
 			Write-Host $line
 		}
 
-		Invoke-PostProcess
 		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "error" $EmailBody
 		Stop-Transcript | Out-Null
@@ -395,10 +403,10 @@ function DiffAnalyze {
 			# YES, check if number of deleted files exceed DEL_THRESHOLD
 			if ($DEL_COUNT -gt $config["SnapRAIDDelThreshold"]) {
 				# YES, lets inform user and not proceed with the job just in case
+				Invoke-PostRun
 				$message = "WARNING: Number of deleted files ($DEL_COUNT) exceeded threshold (" + $config["SnapRAIDDelThreshold"] + "). NOT proceeding with job. Please run manually if this is not an error condition."
 				Write-Host $message
 				Add-Content $EmailBody $message
-				Invoke-PostProcess
 				$subject = $config["SubjectPrefix"] + " " + $message
 				Send-Email $subject "error" $EmailBody
 				Stop-Transcript | Out-Null
@@ -747,13 +755,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:PreProcessHasRun -eq 0) {
-		Invoke-PreProcess
-		Test-ParityFiles
-	}
-
-	# If enabled take services offline
-	ServiceManagement "stop"
+	Invoke-PreRun
 
 	if ($global:Diffchanges -eq 1) {
 		$argument = "sync"
@@ -762,11 +764,9 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	$argument = "check"
 	RunSnapraid $argument
-	# If enabled bring services back online
-	ServiceManagement "start"
+	Invoke-PostRun
 	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
-	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -775,13 +775,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:PreProcessHasRun -eq 0) {
-		Invoke-PreProcess
-		Test-ParityFiles
-	}
-
-	# If enabled take services offline
-	ServiceManagement "stop"
+	Invoke-PreRun
 
 	if ($global:Diffchanges -eq 1) {
 		$argument = "sync"
@@ -796,11 +790,9 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 		RunSnapraid $argument
 	}
 
-	# If enabled bring services back online
-	ServiceManagement "start"
+	Invoke-PostRun
 	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
-	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -809,13 +801,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:PreProcessHasRun -eq 0) {
-		Invoke-PreProcess
-		Test-ParityFiles
-	}
-
-	# If enabled take services offline
-	ServiceManagement "stop"
+	Invoke-PreRun
 
 	if ($global:Diffchanges -eq 1) {
 		$argument = "sync"
@@ -824,11 +810,9 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	$argument = "fix"
 	RunSnapraid $argument
-	# If enabled bring services back online
-	ServiceManagement "start"
+	Invoke-PostRun
 	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
-	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -837,13 +821,7 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	$argument = "diff"
 	RunSnapraid $argument
 
-	if ($global:PreProcessHasRun -eq 0) {
-		Invoke-PreProcess
-		Test-ParityFiles
-	}
-
-	# If enabled take services offline
-	ServiceManagement "stop"
+	Invoke-PreRun
 
 	if ($global:Diffchanges -eq 1) {
 		$argument = "sync"
@@ -852,11 +830,9 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 
 	$argument = "fullscrub"
 	RunSnapraid $argument
-	# If enabled bring services back online
-	ServiceManagement "start"
+	Invoke-PostRun
 	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
 	WriteExtendedLogFile $message
-	Invoke-PostProcess
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
 	$SomethingDone = 1
@@ -865,22 +841,15 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 if ($SomethingDone -ne 1) {
 	# If another command was passed to the script run this command, else run the sync command
 	if ($Argument1 -ne "sync") {
-		if (($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") -and
-			$global:PreProcessHasRun -eq 0)
-		{
-			Invoke-PreProcess
-			Test-ParityFiles
+		if ($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") {
+			Invoke-PreRun
 		}
 
-		# If enabled take services offline
-		ServiceManagement "stop"
 		$argument = $Argument1
 		RunSnapraid $argument
-		# If enabled bring services back online
-		ServiceManagement "start"
+		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		Invoke-PostProcess
 		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "success" $EmailBody
 		$SomethingDone = 1
@@ -890,29 +859,21 @@ if ($SomethingDone -ne 1) {
 		RunSnapraid $argument
 
 		if ($global:Diffchanges -eq 1) {
-			if ($global:PreProcessHasRun -eq 0) {
-				Invoke-PreProcess
-				Test-ParityFiles
-			}
-
-			# If enabled take services offline
-			ServiceManagement "stop"
+			Invoke-PreRun
 			$argument = "sync"
 			RunSnapraid $argument
-			# If enabled bring services back online
-			ServiceManagement "start"
+			Invoke-PostRun
 			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate)"
 			WriteExtendedLogFile $message
-			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
 
 		} else {
 			# NO, so lets log it and exit
+			Invoke-PostRun
 			$message = "$(Get-CurrentDate) No change detected. Nothing to do"
 			WriteExtendedLogFile $message
-			Invoke-PostProcess
 			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
 			Send-Email $subject "success" $EmailBody
 			$SomethingDone = 1
