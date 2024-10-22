@@ -737,102 +737,95 @@ Test-ContentFiles
 $message = "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
 WriteExtendedLogFile $message
 
-if ($Argument1 -eq "syncandcheck") {
-	$argument = "diff"
-	RunSnapraid $argument
-
-	Invoke-PreRun
-
-	if ($global:Diffchanges -eq 1) {
-		$argument = "sync"
+switch ($Argument1) {
+	"syncandcheck" {
+		$argument = "diff"
 		RunSnapraid $argument
-	}
 
-	$argument = "check"
-	RunSnapraid $argument
-	Invoke-PostRun
-	$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
-	WriteExtendedLogFile $message
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "success" $EmailBody
+		Invoke-PreRun
 
-} elseif ($Argument1 -eq "syncandscrub") {
-	$argument = "diff"
-	RunSnapraid $argument
-
-	Invoke-PreRun
-
-	if ($global:Diffchanges -eq 1) {
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	$argument = "scrub"
-	RunSnapraid $argument
-
-	if ($config["SnapRAIDStatusAfterScrub"] -eq 1) {
-		$argument = "status"
-		RunSnapraid $argument
-	}
-
-	Invoke-PostRun
-	$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
-	WriteExtendedLogFile $message
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "success" $EmailBody
-
-} elseif ($Argument1 -eq "syncandfix") {
-	$argument = "diff"
-	RunSnapraid $argument
-
-	Invoke-PreRun
-
-	if ($global:Diffchanges -eq 1) {
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	$argument = "fix"
-	RunSnapraid $argument
-	Invoke-PostRun
-	$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
-	WriteExtendedLogFile $message
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "success" $EmailBody
-
-} elseif ($Argument1 -eq "syncandfullscrub") {
-	$argument = "diff"
-	RunSnapraid $argument
-
-	Invoke-PreRun
-
-	if ($global:Diffchanges -eq 1) {
-		$argument = "sync"
-		RunSnapraid $argument
-	}
-
-	$argument = "fullscrub"
-	RunSnapraid $argument
-	Invoke-PostRun
-	$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
-	WriteExtendedLogFile $message
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "success" $EmailBody
-
-} else {
-	if ($Argument1 -ne "sync") {
-		if ($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") {
-			Invoke-PreRun
+		if ($global:Diffchanges -eq 1) {
+			$argument = "sync"
+			RunSnapraid $argument
 		}
 
-		$argument = $Argument1
+		$argument = "check"
 		RunSnapraid $argument
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
+		$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
 		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "success" $EmailBody
-	} else {
+	}
+
+	"syncandscrub" {
+		$argument = "diff"
+		RunSnapraid $argument
+
+		Invoke-PreRun
+
+		if ($global:Diffchanges -eq 1) {
+			$argument = "sync"
+			RunSnapraid $argument
+		}
+
+		$argument = "scrub"
+		RunSnapraid $argument
+
+		if ($config["SnapRAIDStatusAfterScrub"] -eq 1) {
+			$argument = "status"
+			RunSnapraid $argument
+		}
+
+		Invoke-PostRun
+		$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
+		WriteExtendedLogFile $message
+		$subject = $config["SubjectPrefix"] + " " + $message
+		Send-Email $subject "success" $EmailBody
+	}
+
+	"syncandfix" {
+		$argument = "diff"
+		RunSnapraid $argument
+
+		Invoke-PreRun
+
+		if ($global:Diffchanges -eq 1) {
+			$argument = "sync"
+			RunSnapraid $argument
+		}
+
+		$argument = "fix"
+		RunSnapraid $argument
+		Invoke-PostRun
+		$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
+		WriteExtendedLogFile $message
+		$subject = $config["SubjectPrefix"] + " " + $message
+		Send-Email $subject "success" $EmailBody
+	}
+
+	"syncandfullscrub" {
+		$argument = "diff"
+		RunSnapraid $argument
+
+		Invoke-PreRun
+
+		if ($global:Diffchanges -eq 1) {
+			$argument = "sync"
+			RunSnapraid $argument
+		}
+
+		$argument = "fullscrub"
+		RunSnapraid $argument
+		Invoke-PostRun
+		$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
+		WriteExtendedLogFile $message
+		$subject = $config["SubjectPrefix"] + " " + $message
+		Send-Email $subject "success" $EmailBody
+
+	}
+
+	"sync" {
 		$argument = "diff"
 		RunSnapraid $argument
 
@@ -854,6 +847,20 @@ if ($Argument1 -eq "syncandcheck") {
 			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
 			Send-Email $subject "success" $EmailBody
 		}
+	}
+
+	default {
+		if ($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") {
+			Invoke-PreRun
+		}
+
+		$argument = $Argument1
+		RunSnapraid $argument
+		Invoke-PostRun
+		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
+		WriteExtendedLogFile $message
+		$subject = $config["SubjectPrefix"] + " " + $message
+		Send-Email $subject "success" $EmailBody
 	}
 }
 
