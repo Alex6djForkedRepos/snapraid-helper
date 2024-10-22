@@ -35,7 +35,6 @@ $global:PreProcessHasRun = 0
 $global:ServicesStarted = 0
 $global:ServicesStopped = 0
 $global:Diffchanges = 99
-$SomethingDone = 0
 $HomePath = $MyInvocation.Line | Split-Path
 # General date/time format; short date, long time i.e. 'dd/MM/yyyy HH:mm:ss' but in system locale
 $DateFormat = "G"
@@ -738,7 +737,7 @@ Test-ContentFiles
 $message = "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
 WriteExtendedLogFile $message
 
-if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
+if ($Argument1 -eq "syncandcheck") {
 	$argument = "diff"
 	RunSnapraid $argument
 
@@ -756,9 +755,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	WriteExtendedLogFile $message
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
-	$SomethingDone = 1
 
-} elseif ($Argument1 -eq "syncandscrub" -and $SomethingDone -ne 1) {
+} elseif ($Argument1 -eq "syncandscrub") {
 	$argument = "diff"
 	RunSnapraid $argument
 
@@ -782,9 +780,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	WriteExtendedLogFile $message
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
-	$SomethingDone = 1
 
-} elseif ($Argument1 -eq "syncandfix" -and $SomethingDone -ne 1) {
+} elseif ($Argument1 -eq "syncandfix") {
 	$argument = "diff"
 	RunSnapraid $argument
 
@@ -802,9 +799,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	WriteExtendedLogFile $message
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
-	$SomethingDone = 1
 
-} elseif ($Argument1 -eq "syncandfullscrub" -and $SomethingDone -ne 1) {
+} elseif ($Argument1 -eq "syncandfullscrub") {
 	$argument = "diff"
 	RunSnapraid $argument
 
@@ -822,11 +818,8 @@ if ($Argument1 -eq "syncandcheck" -and $SomethingDone -ne 1) {
 	WriteExtendedLogFile $message
 	$subject = $config["SubjectPrefix"] + " " + $message
 	Send-Email $subject "success" $EmailBody
-	$SomethingDone = 1
-}
 
-if ($SomethingDone -ne 1) {
-	# If another command was passed to the script run this command, else run the sync command
+} else {
 	if ($Argument1 -ne "sync") {
 		if ($Argument1 -ne "diff" -and $Argument1 -ne "list" -and $Argument1 -ne "dup" -and $Argument1 -ne "status" -and $Argument1 -ne "pool") {
 			Invoke-PreRun
@@ -839,8 +832,6 @@ if ($SomethingDone -ne 1) {
 		WriteExtendedLogFile $message
 		$subject = $config["SubjectPrefix"] + " " + $message
 		Send-Email $subject "success" $EmailBody
-		$SomethingDone = 1
-
 	} else {
 		$argument = "diff"
 		RunSnapraid $argument
@@ -854,7 +845,6 @@ if ($SomethingDone -ne 1) {
 			WriteExtendedLogFile $message
 			$subject = $config["SubjectPrefix"] + " " + $message
 			Send-Email $subject "success" $EmailBody
-			$SomethingDone = 1
 
 		} else {
 			# NO, so lets log it and exit
@@ -863,7 +853,6 @@ if ($SomethingDone -ne 1) {
 			WriteExtendedLogFile $message
 			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
 			Send-Email $subject "success" $EmailBody
-			$SomethingDone = 1
 		}
 	}
 }
