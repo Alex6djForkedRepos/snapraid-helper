@@ -193,7 +193,7 @@ function Send-Email ($fSubject, $fSuccess, $EmailBody) {
 			$Mailmessage.Body = $Body
 			$smtpclient.Send($MailMessage)
 
-			if ($config["IncludeExtendedInfoZip"] -eq 1 -and (Test-Path $EmailBodyZip)) {
+			if ($att) {
 				$att.Dispose()
 			}
 
