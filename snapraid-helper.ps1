@@ -66,8 +66,7 @@ function Invoke-PreRun {
 		$global:PreProcessHasRun -eq 0)
 	{
 		# timestamp the job
-		$message = "Starting Pre-Process $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Starting Pre-Process $(Get-CurrentDate)"
 		$exe = $config["ProcessPre"]
 		& "$exe" | Out-Null
 
@@ -80,8 +79,7 @@ function Invoke-PreRun {
 			Stop-Transcript | Out-Null
 			exit 1
 		} else {
-			$message = "Done Starting Pre-Process $(Get-CurrentDate)"
-			WriteLogFile $message
+			WriteLogFile "Done Starting Pre-Process $(Get-CurrentDate)"
 			$global:PreProcessHasRun = 1
 		}
 	}
@@ -91,17 +89,14 @@ function Invoke-PreRun {
 	# If Service Management is enabled, then take services offline
 	if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStopped -ne 1) {
 		# timestamp the job
-		$message = "Stopping Services $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Stopping Services $(Get-CurrentDate)"
 
 		foreach ($service in $ServiceList) {
-			$message = Stop-Service $service
-			WriteLogFile $message
+			WriteLogFile (Stop-Service $service)
 		}
 
 		# timestamp the job
-		$message = "Done Stopping Services $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Done Stopping Services $(Get-CurrentDate)"
 		$global:ServicesStopped = 1
 	}
 }
@@ -110,17 +105,14 @@ function Invoke-PostRun {
 	# If Service Management is enabled, then bring services back online
 	if ($config["ServiceEnable"] -eq 1 -and $global:ServicesStarted -ne 1 -and $global:ServicesStopped -eq 1) {
 		# timestamp the job
-		$message = "Starting Services $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Starting Services $(Get-CurrentDate)"
 
 		foreach ($service in $ServiceList) {
-			$message = Start-Service $service
-			WriteLogFile $message
+			WriteLogFile (Start-Service $service)
 		}
 
 		# timestamp the job
-		$message = "Done Starting Services $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Done Starting Services $(Get-CurrentDate)"
 		$global:ServicesStarted = 1
 	}
 
@@ -129,8 +121,7 @@ function Invoke-PostRun {
 		$global:PreProcessHasRun -eq 1)
 	{
 		# timestamp the job
-		$message = "Starting Post-Process $(Get-CurrentDate)"
-		WriteLogFile $message
+		WriteLogFile "Starting Post-Process $(Get-CurrentDate)"
 		$exe = $config["ProcessPost"]
 		& "$exe" | Out-Null
 
@@ -142,8 +133,7 @@ function Invoke-PostRun {
 			Stop-Transcript | Out-Null
 			exit 1
 		} else {
-			$message = "Done Starting Post-Process $(Get-CurrentDate)"
-			WriteLogFile $message
+			WriteLogFile "Done Starting Post-Process $(Get-CurrentDate)"
 		}
 	}
 }
@@ -360,8 +350,7 @@ function RunSnapraid ($sargument) {
 	}
 
 	# Job was successful, move onto processing.
-	$message = "SnapRAID $sargument Job finished on $(Get-CurrentDate)"
-	WriteExtendedLogFile $message
+	WriteExtendedLogFile "SnapRAID $sargument Job finished on $(Get-CurrentDate)"
 
 	if ($sargument -eq "diff") {
 		DiffAnalyze
@@ -381,8 +370,7 @@ function DiffAnalyze {
 		$MOVE_COUNT = $MOVE_COUNT.Lines
 		$UPDATE_COUNT = $UPDATE_COUNT.Lines + $RESIZE_COUNT.Lines
 
-		$message = "SUMMARY of changes - Added [$ADD_COUNT] - Deleted [$DEL_COUNT] - Moved [$MOVE_COUNT] - Updated [$UPDATE_COUNT]"
-		WriteExtendedLogFile $message
+		WriteExtendedLogFile "SUMMARY of changes - Added [$ADD_COUNT] - Deleted [$DEL_COUNT] - Moved [$MOVE_COUNT] - Updated [$UPDATE_COUNT]"
 
 		# check if files have changed
 		if ($DEL_COUNT -gt 0 -or $ADD_COUNT -gt 0 -or $MOVE_COUNT -gt 0 -or $UPDATE_COUNT -gt 0) {
@@ -409,8 +397,7 @@ function DiffAnalyze {
 			}
 		} else {
 			# NO, so lets log it and exit
-			$message = "$(Get-CurrentDate) No change detected. Nothing to do"
-			WriteExtendedLogFile $message
+			WriteExtendedLogFile "$(Get-CurrentDate) No change detected. Nothing to do"
 			$global:Diffchanges = 0
 		}
 	}
@@ -700,8 +687,7 @@ $ErrorActionPreference = "Continue"
 Start-Transcript -Path $LogFile -Append
 
 # Check Eventlog for Errors
-$message = "Checking for Disk issues in Eventlog at $(Get-CurrentDate)"
-WriteLogFile $message
+WriteLogFile "Checking for Disk issues in Eventlog at $(Get-CurrentDate)"
 
 $EventLogOutput = Get-EventLog -LogName system -EntryType $EventLogEntryTypeList -Source $EventLogSourcesList -After (Get-Date).AddDays($config["EventLogdays"])
 Write-Host "TimeGenerated,EntryType,Source,Message"
@@ -734,23 +720,19 @@ $config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].Split(",")
 Test-ContentFiles
 
 # timestamp the job
-$message = "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
-WriteExtendedLogFile $message
+WriteExtendedLogFile "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
 
 switch ($Argument1) {
 	"syncandcheck" {
-		$argument = "diff"
-		RunSnapraid $argument
+		RunSnapraid "diff"
 
 		Invoke-PreRun
 
 		if ($global:Diffchanges -eq 1) {
-			$argument = "sync"
-			RunSnapraid $argument
+			RunSnapraid "sync"
 		}
 
-		$argument = "check"
-		RunSnapraid $argument
+		RunSnapraid "check"
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
@@ -759,22 +741,18 @@ switch ($Argument1) {
 	}
 
 	"syncandscrub" {
-		$argument = "diff"
-		RunSnapraid $argument
+		RunSnapraid "diff"
 
 		Invoke-PreRun
 
 		if ($global:Diffchanges -eq 1) {
-			$argument = "sync"
-			RunSnapraid $argument
+			RunSnapraid "sync"
 		}
 
-		$argument = "scrub"
-		RunSnapraid $argument
+		RunSnapraid "scrub"
 
 		if ($config["SnapRAIDStatusAfterScrub"] -eq 1) {
-			$argument = "status"
-			RunSnapraid $argument
+			RunSnapraid "status"
 		}
 
 		Invoke-PostRun
@@ -785,18 +763,15 @@ switch ($Argument1) {
 	}
 
 	"syncandfix" {
-		$argument = "diff"
-		RunSnapraid $argument
+		RunSnapraid "diff"
 
 		Invoke-PreRun
 
 		if ($global:Diffchanges -eq 1) {
-			$argument = "sync"
-			RunSnapraid $argument
+			RunSnapraid "sync"
 		}
 
-		$argument = "fix"
-		RunSnapraid $argument
+		RunSnapraid "fix"
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
@@ -805,18 +780,15 @@ switch ($Argument1) {
 	}
 
 	"syncandfullscrub" {
-		$argument = "diff"
-		RunSnapraid $argument
+		RunSnapraid "diff"
 
 		Invoke-PreRun
 
 		if ($global:Diffchanges -eq 1) {
-			$argument = "sync"
-			RunSnapraid $argument
+			RunSnapraid "sync"
 		}
 
-		$argument = "fullscrub"
-		RunSnapraid $argument
+		RunSnapraid "fullscrub"
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
@@ -826,13 +798,11 @@ switch ($Argument1) {
 	}
 
 	"sync" {
-		$argument = "diff"
-		RunSnapraid $argument
+		RunSnapraid "diff"
 
 		if ($global:Diffchanges -eq 1) {
 			Invoke-PreRun
-			$argument = "sync"
-			RunSnapraid $argument
+			RunSnapraid "sync"
 			Invoke-PostRun
 			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate)"
 			WriteExtendedLogFile $message
@@ -854,8 +824,7 @@ switch ($Argument1) {
 			Invoke-PreRun
 		}
 
-		$argument = $Argument1
-		RunSnapraid $argument
+		RunSnapraid $Argument1
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
