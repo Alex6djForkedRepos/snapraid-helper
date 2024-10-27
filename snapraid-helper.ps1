@@ -74,8 +74,7 @@ function Invoke-PreRun {
 			Invoke-PostRun
 			$message = "ERROR: Pre-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
 			WriteLogFile $message
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "error" $EmailBody
+			Send-Email $message "error" $EmailBody
 			Stop-Transcript | Out-Null
 			exit 1
 		} else {
@@ -128,8 +127,7 @@ function Invoke-PostRun {
 		if (!($LastExitCode -eq "0")) {
 			$message = "ERROR: Post-Process failed on $(Get-CurrentDate) with exit code $LastExitCode"
 			WriteLogFile $message
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "error" $EmailBody
+			Send-Email $message "error" $EmailBody
 			Stop-Transcript | Out-Null
 			exit 1
 		} else {
@@ -140,8 +138,8 @@ function Invoke-PostRun {
 
 # Build Email Function (used many times in script)
 function Send-Email ($fSubject, $fSuccess, $EmailBody) {
-	# $fSubject -- passed subject line
 	# $fSuccess -- "success" = success email, "error" = error email, "error2" = error email script/snapraid running
+	$fSubject = $config["SubjectPrefix"] + " " + $fSubject
 	$Body = ""
 
 	$EventlogID = switch ($fSuccess) {
@@ -218,8 +216,7 @@ function Test-ContentFiles {
 			$message = "ERROR: Content file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "error" $EmailBody
+			Send-Email $message "error" $EmailBody
 			Stop-Transcript | Out-Null
 			exit 1
 		}
@@ -233,8 +230,7 @@ function Test-ParityFiles {
 			$message = "ERROR: Parity file ($element) not found!"
 			Write-Host $message -ForegroundColor red -BackgroundColor yellow
 			Add-Content $EmailBody $message
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "error" $EmailBody
+			Send-Email $message "error" $EmailBody
 			Stop-Transcript | Out-Null
 			exit 1
 		}
@@ -343,8 +339,7 @@ function RunSnapraid ($sargument) {
 			Write-Host $line
 		}
 
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "error" $EmailBody
+		Send-Email $message "error" $EmailBody
 		Stop-Transcript | Out-Null
 		exit 1
 	}
@@ -381,8 +376,7 @@ function DiffAnalyze {
 				$message = "WARNING: Number of deleted files ($DEL_COUNT) exceeded threshold (" + $config["SnapRAIDDelThreshold"] + "). NOT proceeding with job. Please run manually if this is not an error condition."
 				Write-Host $message
 				Add-Content $EmailBody $message
-				$subject = $config["SubjectPrefix"] + " " + $message
-				Send-Email $subject "error" $EmailBody
+				Send-Email $message "error" $EmailBody
 				Stop-Transcript | Out-Null
 				exit 1
 			} else {
@@ -596,8 +590,7 @@ if ($ScriptRunning -match "Handle") {
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "error2"
+	Send-Email $message "error2"
 	exit 1
 }
 
@@ -606,8 +599,7 @@ if ($SnapraidRunning -match "Handle") {
 	Write-Host "----------------------------------------"
 	Write-Host $message
 	Write-Host "----------------------------------------"
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "error2"
+	Send-Email $message "error2"
 	exit 1
 }
 
@@ -707,8 +699,7 @@ if (($EventLogCount -ge 1) -and ($config["EventLogHaltOnDiskError"] -eq 1)) {
 	$message = "WARN: Found disk Errors/Warnings in EventLogs.  Aborting sync based on HaltOnDiskError"
 	Write-Host $message -ForegroundColor red -BackgroundColor yellow
 	Add-Content $EmailBody $message
-	$subject = $config["SubjectPrefix"] + " " + $message
-	Send-Email $subject "error" $EmailBody
+	Send-Email $message "error" $EmailBody
 	Stop-Transcript | Out-Null
 	exit 1
 }
@@ -736,8 +727,7 @@ switch ($Argument1) {
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "success" $EmailBody
+		Send-Email $message "success" $EmailBody
 	}
 
 	"syncandscrub" {
@@ -758,8 +748,7 @@ switch ($Argument1) {
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "success" $EmailBody
+		Send-Email $message "success" $EmailBody
 	}
 
 	"syncandfix" {
@@ -775,8 +764,7 @@ switch ($Argument1) {
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "success" $EmailBody
+		Send-Email $message "success" $EmailBody
 	}
 
 	"syncandfullscrub" {
@@ -792,8 +780,7 @@ switch ($Argument1) {
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "success" $EmailBody
+		Send-Email $message "success" $EmailBody
 
 	}
 
@@ -806,16 +793,14 @@ switch ($Argument1) {
 			Invoke-PostRun
 			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate)"
 			WriteExtendedLogFile $message
-			$subject = $config["SubjectPrefix"] + " " + $message
-			Send-Email $subject "success" $EmailBody
+			Send-Email $message "success" $EmailBody
 
 		} else {
 			# NO, so lets log it and exit
 			Invoke-PostRun
-			$message = "$(Get-CurrentDate) No change detected. Nothing to do"
+			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate) - No change detected. Nothing to do"
 			WriteExtendedLogFile $message
-			$subject = $config["SubjectPrefix"] + " SUCCESS: SnapRAID SYNC - No change detected. Nothing to do"
-			Send-Email $subject "success" $EmailBody
+			Send-Email $message "success" $EmailBody
 		}
 	}
 
@@ -828,8 +813,7 @@ switch ($Argument1) {
 		Invoke-PostRun
 		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
 		WriteExtendedLogFile $message
-		$subject = $config["SubjectPrefix"] + " " + $message
-		Send-Email $subject "success" $EmailBody
+		Send-Email $message "success" $EmailBody
 	}
 }
 
