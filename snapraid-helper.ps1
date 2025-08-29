@@ -237,16 +237,12 @@ function Test-ParityFiles {
 	}
 }
 
-function WriteLogFile ($ftext) {
-	Write-Host "----------------------------------------"
-	Write-Host $ftext
-	Write-Host "----------------------------------------"
-	Add-Content $EmailBody "----------------------------------------"
-	Add-Content $EmailBody $ftext
-	Add-Content $EmailBody "----------------------------------------"
-}
+function WriteLogFile {
+	param (
+		[string]$ftext,
+		[switch]$Extended
+	)
 
-function WriteExtendedLogFile ($ftext) {
 	Write-Host "----------------------------------------"
 	Write-Host $ftext
 	Write-Host "----------------------------------------"
@@ -254,7 +250,7 @@ function WriteExtendedLogFile ($ftext) {
 	Add-Content $EmailBody $ftext
 	Add-Content $EmailBody "----------------------------------------"
 
-	if ($config["IncludeExtendedInfoZip"] -eq 1) {
+	if ($Extended -and $config["IncludeExtendedInfoZip"] -eq 1) {
 		Add-Content $EmailBodyTmp "----------------------------------------"
 		Add-Content $EmailBodyTmp $ftext
 		Add-Content $EmailBodyTmp "----------------------------------------"
@@ -322,10 +318,10 @@ function RunSnapraid ($sargument) {
 		!($LastExitCode -eq "2" -and $sargument -eq "diff"))
 	{
 		Invoke-PostRun
-		$message = "ERROR: SnapRAID $sargument Job FAILED on $(Get-CurrentDate) with exit code $LastExitCode"
-		WriteExtendedLogFile $message
-		$message2 = "Including detailed SnapRAID Log"
-		WriteExtendedLogFile $message2
+		$message = "ERROR: $($sArgument.ToUpper()) Job FAILED on $(Get-CurrentDate) with exit code $LastExitCode"
+		WriteLogFile $message -Extended
+		$message2 = "Including detailed log"
+		WriteLogFile $message2 -Extended
 		$SnapRAIDLogfileInRAM = (Get-Content $SnapRAIDLogfile | Out-String)
 
 		if ($config["IncludeExtendedInfoZip"] -eq 1) {
@@ -345,7 +341,7 @@ function RunSnapraid ($sargument) {
 	}
 
 	# Job was successful, move onto processing.
-	WriteExtendedLogFile "SnapRAID $sargument Job finished on $(Get-CurrentDate)"
+	WriteLogFile "$($sargument.ToUpper()) Job finished on $(Get-CurrentDate)" -Extended
 
 	if ($sargument -eq "diff") {
 		DiffAnalyze
@@ -365,7 +361,7 @@ function DiffAnalyze {
 		$MOVE_COUNT = $MOVE_COUNT.Lines
 		$UPDATE_COUNT = $UPDATE_COUNT.Lines + $RESIZE_COUNT.Lines
 
-		WriteExtendedLogFile "SUMMARY of changes - Added [$ADD_COUNT] - Deleted [$DEL_COUNT] - Moved [$MOVE_COUNT] - Updated [$UPDATE_COUNT]"
+		WriteLogFile "SUMMARY of changes - Added [$ADD_COUNT] - Deleted [$DEL_COUNT] - Moved [$MOVE_COUNT] - Updated [$UPDATE_COUNT]" -Extended
 
 		# check if files have changed
 		if ($DEL_COUNT -gt 0 -or $ADD_COUNT -gt 0 -or $MOVE_COUNT -gt 0 -or $UPDATE_COUNT -gt 0) {
@@ -391,7 +387,7 @@ function DiffAnalyze {
 			}
 		} else {
 			# NO, so lets log it and exit
-			WriteExtendedLogFile "$(Get-CurrentDate) No change detected. Nothing to do"
+			WriteLogFile "$(Get-CurrentDate) No change detected. Nothing to do" -Extended
 			$global:Diffchanges = 0
 		}
 	}
@@ -711,7 +707,7 @@ $config["SnapRAIDParityFiles"] = $config["SnapRAIDParityFiles"].Split(",")
 Test-ContentFiles
 
 # timestamp the job
-WriteExtendedLogFile "SnapRAID $argument1 Job started on $(Get-CurrentDate)"
+WriteLogFile "$($Argument1.ToUpper()) Job started on $(Get-CurrentDate)" -Extended
 
 switch ($Argument1) {
 	"syncandcheck" {
@@ -725,8 +721,8 @@ switch ($Argument1) {
 
 		RunSnapraid "check"
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID SYNC and CHECK Job finished on $(Get-CurrentDate)"
-		WriteExtendedLogFile $message
+		$message = "SUCCESS: SYNC and CHECK Job finished on $(Get-CurrentDate)"
+		WriteLogFile $message -Extended
 		Send-Email $message "success" $EmailBody
 	}
 
@@ -746,8 +742,8 @@ switch ($Argument1) {
 		}
 
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID SYNC and SCRUB Job finished on $(Get-CurrentDate)"
-		WriteExtendedLogFile $message
+		$message = "SUCCESS: SYNC and SCRUB Job finished on $(Get-CurrentDate)"
+		WriteLogFile $message -Extended
 		Send-Email $message "success" $EmailBody
 	}
 
@@ -762,8 +758,8 @@ switch ($Argument1) {
 
 		RunSnapraid "fix"
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID SYNC and FIX Job finished on $(Get-CurrentDate)"
-		WriteExtendedLogFile $message
+		$message = "SUCCESS: SYNC and FIX Job finished on $(Get-CurrentDate)"
+		WriteLogFile $message -Extended
 		Send-Email $message "success" $EmailBody
 	}
 
@@ -778,8 +774,8 @@ switch ($Argument1) {
 
 		RunSnapraid "fullscrub"
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
-		WriteExtendedLogFile $message
+		$message = "SUCCESS: SYNC and FULL SCRUB Job finished on $(Get-CurrentDate)"
+		WriteLogFile $message -Extended
 		Send-Email $message "success" $EmailBody
 
 	}
@@ -791,15 +787,15 @@ switch ($Argument1) {
 			Invoke-PreRun
 			RunSnapraid "sync"
 			Invoke-PostRun
-			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate)"
-			WriteExtendedLogFile $message
+			$message = "SUCCESS: SYNC Job finished on $(Get-CurrentDate)"
+			WriteLogFile $message -Extended
 			Send-Email $message "success" $EmailBody
 
 		} else {
 			# NO, so lets log it and exit
 			Invoke-PostRun
-			$message = "SUCCESS: SnapRAID SYNC Job finished on $(Get-CurrentDate) - No change detected. Nothing to do"
-			WriteExtendedLogFile $message
+			$message = "SUCCESS: SYNC Job finished on $(Get-CurrentDate) - No change detected. Nothing to do"
+			WriteLogFile $message -Extended
 			Send-Email $message "success" $EmailBody
 		}
 	}
@@ -811,8 +807,8 @@ switch ($Argument1) {
 
 		RunSnapraid $Argument1
 		Invoke-PostRun
-		$message = "SUCCESS: SnapRAID $Argument1 Job finished on $(Get-CurrentDate)"
-		WriteExtendedLogFile $message
+		$message = "SUCCESS: $($Argument1.ToUpper()) Job finished on $(Get-CurrentDate)"
+		WriteLogFile $message -Extended
 		Send-Email $message "success" $EmailBody
 	}
 }
