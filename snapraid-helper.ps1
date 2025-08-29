@@ -680,12 +680,12 @@ WriteLogFile "Checking for Disk issues in Eventlog at $(Get-CurrentDate)"
 $EventLogOutput = Get-EventLog -LogName system -EntryType $EventLogEntryTypeList -Source $EventLogSourcesList -After (Get-Date).AddDays($config["EventLogdays"])
 Write-Host "TimeGenerated,EntryType,Source,Message"
 
-foreach ($event in $EventLogOutput) {
+foreach ($evt in $EventLogOutput) {
 	$EventLogCount = $EventLogcount + 1
-	$TimeGenerated = $event.TimeGenerated
-	$EntryType = $event.EntryType
-	$Source = $event.Source
-	$EventMessage = $event.Message
+	$TimeGenerated = $evt.TimeGenerated
+	$EntryType = $evt.EntryType
+	$Source = $evt.Source
+	$EventMessage = $evt.Message
 
 	Write-Host "$TimeGenerated,$EntryType,$Source,$EventMessage"
 	Add-Content $EmailBody "$TimeGenerated,$EntryType,$Source,$EventMessage"
